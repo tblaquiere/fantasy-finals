@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>fantasy-finals — Updated Design Mockups</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:      #09090b;
+    --card:    #18181b;
+    --border:  #27272a;
+    --z700:    #3f3f46;
+    --z600:    #52525b;
+    --muted:   #a1a1aa;
+    --text:    #fafafa;
+    --orange:  #f97316;
+    --orange2: #ea580c;
+    --green:   #22c55e;
+    --red:     #ef4444;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: #0a0a0c;
+    color: var(--text);
+    padding: 40px 24px 80px;
+  }
+
+  /* ── Page header ── */
+  .page-header { text-align: center; margin-bottom: 48px; }
+  .page-header .tag {
+    display: inline-block; background: var(--orange); color: #fff;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+    text-transform: uppercase; padding: 3px 10px; border-radius: 99px; margin-bottom: 12px;
+  }
+  .page-header h1 { font-size: 26px; font-weight: 800; letter-spacing: -0.4px; }
+  .page-header p { font-size: 14px; color: var(--muted); margin-top: 8px; max-width: 560px; margin-inline: auto; line-height: 1.6; }
+
+  /* ── Section divider ── */
+  .section { max-width: 1120px; margin: 0 auto 64px; }
+  .section-title { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin-bottom: 24px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+
+  /* ── Grid ── */
+  .grid { display: flex; flex-wrap: wrap; gap: 40px 32px; }
+  .col { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .col-label { text-align: center; width: 320px; }
+  .col-label h3 { font-size: 14px; font-weight: 700; color: var(--text); }
+  .col-label p { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+
+  /* ── Phone ── */
+  .phone {
+    width: 320px; flex-shrink: 0;
+    background: var(--bg); border-radius: 36px;
+    border: 2px solid var(--border);
+    overflow: hidden; display: flex; flex-direction: column;
+    box-shadow: 0 20px 48px rgba(0,0,0,0.7);
+  }
+  .phone-tall { height: 660px; }
+  .phone-auto { height: auto; }
+
+  /* ── Status bar ── */
+  .status-bar {
+    height: 32px; display: flex; align-items: center;
+    justify-content: space-between; padding: 0 20px;
+    font-size: 11px; font-weight: 600; color: var(--muted); flex-shrink: 0;
+  }
+
+  /* ── Top nav ── */
+  .top-nav { padding: 0 16px 12px; flex-shrink: 0; }
+  .top-nav-row { display: flex; align-items: center; justify-content: space-between; }
+  .screen-title { font-size: 20px; font-weight: 800; letter-spacing: -0.3px; }
+  .screen-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  /* ── Divider ── */
+  .div { height: 1px; background: var(--border); flex-shrink: 0; }
+
+  /* ── Clock chip ── */
+  .clock { display: inline-flex; align-items: center; gap: 5px; background: rgba(249,115,22,0.15); border: 1px solid rgba(249,115,22,0.35); border-radius: 99px; padding: 3px 10px; font-size: 12px; font-weight: 700; color: var(--orange); }
+  .clock.red { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.35); color: var(--red); }
+  .clock-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  /* ── LIVE badge ── */
+  .live { display: inline-flex; align-items: center; gap: 4px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: var(--red); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; padding: 3px 8px; border-radius: 99px; }
+  .live-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--red); }
+
+  /* ── Section header ── */
+  .sec-hdr { padding: 8px 16px 5px; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; flex-shrink: 0; }
+
+  /* ── Player row (A/B hybrid ~72px) ── */
+  .player-row {
+    display: flex; align-items: center; padding: 10px 16px;
+    border-bottom: 1px solid var(--border); gap: 10px;
+    min-height: 64px; cursor: pointer; transition: background 0.1s;
+    flex-shrink: 0;
+  }
+  .player-row:hover { background: rgba(249,115,22,0.05); }
+  .player-row.selected { border-left: 3px solid var(--orange); padding-left: 13px; background: rgba(249,115,22,0.07); }
+  .player-row.used { opacity: 0.4; cursor: not-allowed; }
+
+  .p-avatar {
+    width: 38px; height: 38px; border-radius: 50%; background: var(--z700);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: var(--muted); flex-shrink: 0;
+  }
+  .p-avatar.orange { background: rgba(249,115,22,0.2); color: var(--orange); }
+
+  .p-info { flex: 1; min-width: 0; }
+  .p-name { font-size: 15px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .p-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .p-home { color: var(--orange); font-weight: 500; }
+
+  .p-right { text-align: right; flex-shrink: 0; }
+  .p-avg { font-size: 16px; font-weight: 700; color: var(--text); }
+  .p-last { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  .used-badge {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.4px; color: var(--muted);
+    background: rgba(161,161,170,0.1); border: 1px solid var(--border);
+    padding: 2px 6px; border-radius: 4px; flex-shrink: 0;
+  }
+
+  /* ── Player expand ── */
+  .p-expand {
+    background: rgba(255,255,255,0.03); border-top: 1px solid var(--border);
+    padding: 10px 16px 12px 64px; flex-shrink: 0;
+  }
+  .stat-line {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 3px 0; font-size: 12px;
+  }
+  .stat-label { color: var(--muted); }
+  .stat-multi { color: var(--z600); font-size: 11px; margin-left: 4px; }
+  .stat-val { color: var(--text); font-weight: 600; min-width: 28px; text-align: right; }
+  .stat-pts { color: var(--orange); font-weight: 700; min-width: 42px; text-align: right; }
+  .expand-total {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border);
+    font-size: 13px; font-weight: 700;
+  }
+  .expand-total-pts { color: var(--orange); font-size: 15px; }
+
+  /* ── Confirm button ── */
+  .btn-primary {
+    background: var(--orange); color: #fff; font-size: 14px; font-weight: 700;
+    border: none; border-radius: 10px; padding: 13px 0;
+    width: calc(100% - 32px); margin: 8px 16px 0; cursor: pointer;
+    letter-spacing: 0.2px; flex-shrink: 0;
+  }
+  .btn-primary.red { background: var(--red); }
+  .btn-ghost {
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    font-size: 13px; font-weight: 500; border-radius: 10px; padding: 10px 0;
+    width: calc(100% - 32px); margin: 6px 16px 0; cursor: pointer; flex-shrink: 0;
+  }
+
+  /* ── Active state bar ── */
+  .active-bar {
+    background: rgba(249,115,22,0.1); border-top: 1px solid rgba(249,115,22,0.25);
+    padding: 8px 16px; display: flex; align-items: center;
+    justify-content: space-between; flex-shrink: 0;
+  }
+  .active-bar.red { background: rgba(239,68,68,0.1); border-top-color: rgba(239,68,68,0.25); }
+  .bar-label { font-size: 11px; font-weight: 700; color: var(--orange); text-transform: uppercase; letter-spacing: 0.5px; }
+  .bar-label.red { color: var(--red); }
+  .bar-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+  /* ── Bottom nav ── */
+  .bottom-nav {
+    height: 60px; border-top: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-around;
+    padding: 0 8px; flex-shrink: 0; background: var(--card);
+  }
+  .nav-item { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10px; font-weight: 500; color: var(--muted); padding: 8px 16px; }
+  .nav-item.active { color: var(--orange); }
+  .nav-icon { width: 20px; height: 20px; border-radius: 4px; background: currentColor; opacity: 0.6; }
+  .nav-item.active .nav-icon { opacity: 1; }
+
+  /* ── Scroll area ── */
+  .scroll { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+
+  /* ── Success banner ── */
+  .success {
+    background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.25);
+    border-radius: 12px; margin: 10px 12px; padding: 12px 14px;
+    display: flex; align-items: flex-start; gap: 10px; flex-shrink: 0;
+  }
+  .success-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); flex-shrink: 0; margin-top: 3px; }
+  .success-label { font-size: 13px; font-weight: 700; color: var(--green); }
+  .success-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  /* ── Snackbar ── */
+  .snackbar {
+    background: var(--z700); border-radius: 8px; margin: 0 12px 8px;
+    padding: 10px 14px; display: flex; align-items: center; justify-content: space-between;
+    font-size: 12px; color: var(--text); flex-shrink: 0;
+  }
+  .snackbar-undo { color: var(--orange); font-weight: 700; font-size: 12px; }
+
+  /* ── Mozgov header ── */
+  .mozgov-hdr {
+    background: rgba(239,68,68,0.1); border-bottom: 1px solid rgba(239,68,68,0.25);
+    padding: 12px 16px; flex-shrink: 0;
+  }
+  .mozgov-title { font-size: 13px; font-weight: 800; color: var(--red); text-transform: uppercase; letter-spacing: 0.3px; }
+  .mozgov-desc { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+  .mozgov-timer { font-size: 36px; font-weight: 800; color: var(--red); margin-top: 6px; letter-spacing: -1px; line-height: 1; }
+  .mozgov-timer-label { font-size: 11px; color: rgba(239,68,68,0.6); font-weight: 500; margin-top: 2px; }
+
+  /* ── Feed ── */
+  .feed-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .feed-avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--z700); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: var(--muted); flex-shrink: 0; margin-top: 1px; }
+  .feed-content { flex: 1; }
+  .feed-text { font-size: 13px; color: var(--text); line-height: 1.4; }
+  .feed-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .badge { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; margin-top: 2px; }
+  .badge-pick { background: rgba(249,115,22,0.15); color: var(--orange); border: 1px solid rgba(249,115,22,0.25); }
+  .badge-auto { background: rgba(161,161,170,0.1); color: var(--muted); border: 1px solid rgba(161,161,170,0.2); }
+  .badge-mozgov { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.25); }
+
+  /* ── Stat grid ── */
+  .stat-grid { width: 100%; border-collapse: collapse; font-size: 11px; flex-shrink: 0; }
+  .stat-grid th { padding: 6px 8px; text-align: right; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); border-bottom: 1px solid var(--border); }
+  .stat-grid th:first-child, .stat-grid th:nth-child(2) { text-align: left; }
+  .stat-grid td { padding: 8px 8px; text-align: right; color: var(--text); border-bottom: 1px solid rgba(39,39,42,0.6); vertical-align: middle; }
+  .stat-grid td:first-child { text-align: left; font-weight: 600; font-size: 12px; }
+  .stat-grid td:nth-child(2) { text-align: left; color: var(--muted); font-size: 11px; }
+  .stat-grid .leader { color: var(--orange); font-weight: 700; }
+  .stat-grid tfoot td { border-top: 1px solid var(--border); border-bottom: none; font-weight: 600; padding-top: 10px; }
+
+  /* ── Auto-assign card ── */
+  .auto-card {
+    background: rgba(161,161,170,0.06); border: 1px solid var(--border);
+    border-radius: 12px; margin: 10px 12px; padding: 14px; flex-shrink: 0;
+  }
+  .auto-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin-bottom: 5px; }
+  .auto-player { font-size: 17px; font-weight: 700; color: var(--text); }
+  .auto-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .auto-reason { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .auto-score { margin-top: 8px; font-size: 20px; font-weight: 800; color: var(--text); }
+
+  /* ── Nudge card ── */
+  .nudge {
+    background: rgba(161,161,170,0.05); border: 1px solid var(--border);
+    border-radius: 10px; margin: 0 12px 8px; padding: 10px 12px;
+    font-size: 12px; color: var(--muted); line-height: 1.5; flex-shrink: 0;
+  }
+  .nudge a { color: var(--orange); font-weight: 600; }
+
+  /* ── Standings row ── */
+  .std-row { display: flex; align-items: center; padding: 9px 16px; border-bottom: 1px solid var(--border); gap: 10px; flex-shrink: 0; }
+  .std-rank { font-size: 13px; font-weight: 700; color: var(--muted); width: 18px; flex-shrink: 0; }
+  .std-rank.gold { color: #f59e0b; }
+  .std-name { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; }
+  .std-player { font-size: 11px; color: var(--muted); }
+  .std-pts { font-size: 15px; font-weight: 700; color: var(--text); }
+
+  /* ── Notes ── */
+  .notes { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; width: 320px; }
+  .notes ul { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  .notes li { font-size: 12px; color: var(--muted); padding-left: 14px; position: relative; line-height: 1.4; }
+  .notes li::before { content: ''; position: absolute; left: 0; top: 6px; width: 5px; height: 5px; border-radius: 50%; background: var(--orange); }
+
+  .sp { height: 6px; flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <div class="tag">Updated — Post Party Mode</div>
+  <h1>fantasy-finals — Finalized Design Mockups</h1>
+  <p>Reflects all decisions from the party mode discussion and spreadsheet review. A/B hybrid rows, player data model, Mozgov copy correction, standings stat breakdown, auto-assign outcome.</p>
+</div>
+
+<!-- ============================================================ -->
+<!--  SECTION 1: PICK SCREEN                                       -->
+<!-- ============================================================ -->
+
+<div class="section">
+  <div class="section-title">Pick Screen — Finalized Direction</div>
+  <div class="grid">
+
+    <!-- Default pick screen -->
+    <div class="col">
+      <div class="col-label">
+        <h3>Pick Screen — Browse</h3>
+        <p>A/B hybrid rows (~72px). Sorted by series fantasy avg. Home/away inline. Used players dimmed with badge.</p>
+      </div>
+      <div class="phone phone-tall">
+        <div class="status-bar"><span>9:41</span><span>●●●</span></div>
+        <div class="top-nav">
+          <div class="top-nav-row">
+            <div class="screen-title">Pick a Player</div>
+            <div class="clock"><span class="clock-dot"></span> 47:22</div>
+          </div>
+          <div class="screen-sub">GSW vs LAL · Game 3 · Your turn — pick #4</div>
+        </div>
+        <div class="div"></div>
+        <div class="sec-hdr">Eligible Players · sorted by series avg</div>
+        <div class="scroll">
+          <!-- Row 1 — available -->
+          <div class="player-row">
+            <div class="p-avatar">SC</div>
+            <div class="p-info">
+              <div class="p-name">Stephen Curry</div>
+              <div class="p-meta">GSW · <span class="p-home">Home</span></div>
+            </div>
+            <div class="p-right">
+              <div class="p-avg">34.1</div>
+              <div class="p-last">28 last game</div>
+            </div>
+          </div>
+          <!-- Row 2 — selected -->
+          <div class="player-row selected">
+            <div class="p-avatar orange">AD</div>
+            <div class="p-info">
+              <div class="p-name">Anthony Davis</div>
+              <div class="p-meta">LAL · Away</div>
+            </div>
+            <div class="p-right">
+              <div class="p-avg">28.3</div>
+              <div class="p-last">22 last game</div>
+            </div>
+          </div>
+          <!-- Row 3 — available -->
+          <div class="player-row">
+            <div class="p-avatar">LJ</div>
+            <div class="p-info">
+              <div class="p-name">LeBron James</div>
+              <div class="p-meta">LAL · Away</div>
+            </div>
+            <div class="p-right">
+              <div class="p-avg">26.1</div>
+              <div class="p-last">31 last game</div>
+            </div>
+          </div>
+          <!-- Row 4 — available -->
+          <div class="player-row">
+            <div class="p-avatar">KT</div>
+            <div class="p-info">
+              <div class="p-name">Klay Thompson</div>
+              <div class="p-meta">GSW · <span class="p-home">Home</span></div>
+            </div>
+            <div class="p-right">
+              <div class="p-avg">19.4</div>
+              <div class="p-last">16 last game</div>
+            </div>
+          </div>
+          <!-- Row 5 — used -->
+          <div class="player-row used">
+            <div class="p-avatar">TH</div>
+            <div class="p-info">
+              <div class="p-name">Tyrese Haliburton</div>
+              <div class="p-meta">GSW · <span class="p-home">Home</span></div>
+            </div>
+            <div class="p-right" style="display:flex;align-items:center;gap:8px;">
+              <div class="used-badge">Used</div>
+            </div>
+          </div>
+          <!-- Row 6 — available -->
+          <div class="player-row">
+            <div class="p-avatar">DG</div>
+            <div class="p-info">
+              <div class="p-name">Draymond Green</div>
+              <div class="p-meta">GSW · <span class="p-home">Home</span></div>
+            </div>
+            <div class="p-right">
+              <div class="p-avg">9.2</div>
+              <div class="p-last">11 last game</div>
+            </div>
+          </div>
+        </div>
+        <div class="sp"></div>
+        <button class="btn-primary">Confirm — Anthony Davis</button>
+        <div class="sp"></div>
+        <div class="active-bar">
+          <div>
+            <div class="bar-label">Your turn</div>
+            <div class="bar-sub">47 min remaining · pick #4 of 7</div>
+          </div>
+          <div class="clock"><span class="clock-dot"></span> 47:22</div>
+        </div>
+        <div class="bottom-nav">
+          <div class="nav-item active"><div class="nav-icon"></div>Draft</div>
+          <div class="nav-item"><div class="nav-icon"></div>Standings</div>
+          <div class="nav-item"><div class="nav-icon"></div>League</div>
+        </div>
+      </div>
+      <div class="notes">
+        <ul>
+          <li>Series fantasy avg is the primary sort — best performer always first</li>
+          <li>Home/Away inline — orange "Home" signals advantaged game context</li>
+          <li>Last game total gives recent-form signal without clutter</li>
+          <li>Used rows: dimmed opacity + "Used" badge — visible, not hidden</li>
+          <li>Selected row: orange left border + tint — unambiguous</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Player expand -->
+    <div class="col">
+      <div class="col-label">
+        <h3>Player Detail — Expanded</h3>
+        <p>Tap any row to expand full stat breakdown with fantasy multipliers. Jake's power feature. Mark never opens it.</p>
+      </div>
+      <div class="phone phone-tall">
+        <div class="status-bar"><span>9:41</span><span>●●●</span></div>
+        <div class="top-nav">
+          <div class="top-nav-row">
+            <div class="screen-title">Pick a Player</div>
+            <div class="clock"><span class="clock-dot"></span> 47:22</div>
+          </div>
+          <div class="screen-sub">GSW vs LAL · Game 3 · Your turn</div>
+        </div>
+        <div class="div"></div>
+        <div class="sec-hdr">Eligible Players · sorted by series avg</div>
+        <div class="scroll">
+          <div class="player-row">
+            <div class="p-avatar">SC</div>
+            <div class="p-info">
+              <div class="p-name">Stephen Curry</div>
+              <div class="p-meta">GSW · <span class="p-home">Home</span></div>
+            </div>
+            <div class="p-right"><div class="p-avg">34.1</div><div class="p-last">28 last game</div></div>
+          </div>
+          <!-- Expanded row -->
+          <div class="player-row selected" style="border-bottom:none;">
+            <div class="p-avatar orange">AD</div>
+            <div class="p-info">
+              <div class="p-name">Anthony Davis</div>
+              <div class="p-meta">LAL · Away</div>
+            </div>
+            <div class="p-right"><div class="p-avg">28.3</div><div class="p-last">22 last game</div></div>
+          </div>
+          <!-- Expand panel -->
+          <div class="p-expand">
+            <div class="stat-line">
+              <span class="stat-label">Points <span class="stat-multi">×1</span></span>
+              <span class="stat-val">18</span>
+              <span class="stat-pts">= 18 pts</span>
+            </div>
+            <div class="stat-line">
+              <span class="stat-label">Rebounds <span class="stat-multi">×2</span></span>
+              <span class="stat-val">10</span>
+              <span class="stat-pts">= 20 pts</span>
+            </div>
+            <div class="stat-line">
+              <span class="stat-label">Assists <span class="stat-multi">×2</span></span>
+              <span class="stat-val">2</span>
+              <span class="stat-pts">= 4 pts</span>
+            </div>
+            <div class="stat-line">
+              <span class="stat-label">Steals <span class="stat-multi">×3</span></span>
+              <span class="stat-val">1</span>
+              <span class="stat-pts">= 3 pts</span>
+            </div>
+            <div class="stat-line">
+              <span class="stat-label">Blocks <span class="stat-multi">×3</span></span>
+              <span class="stat-val">2</span>
+              <span class="stat-pts">= 6 pts</span>
+            </div>
+            <div class="expand-total">
+              <span style="color:var(--muted);">Series avg fantasy total</span>
+              <span class="expand-total-pts">51 pts</span>
+            </div>
+          </div>
+          <div class="player-row">
+            <div class="p-avatar">LJ</div>
+            <div class="p-info"><div class="p-name">LeBron James</div><div class="p-meta">LAL · Away</div></div>
+            <div class="p-right"><div class="p-avg">26.1</div><div class="p-last">31 last game</div></div>
+          </div>
+          <div class="player-row used">
+            <div class="p-avatar">TH</div>
+            <div class="p-info"><div class="p-name">Tyrese Haliburton</div><div class="p-meta">GSW · <span class="p-home">Home</span></div></div>
+            <div class="p-right"><div class="used-badge">Used</div></div>
+          </div>
+        </div>
+        <div class="sp"></div>
+        <button class="btn-primary">Confirm — Anthony Davis</button>
+        <div class="sp"></div>
+        <div class="active-bar">
+          <div><div class="bar-label">Your turn</div><div class="bar-sub">47 min remaining</div></div>
+          <div class="clock"><span class="clock-dot"></span> 47:22</div>
+        </div>
+        <div class="bottom-nav">
+          <div class="nav-item active"><div class="nav-icon"></div>Draft</div>
+          <div class="nav-item"><div class="nav-icon"></div>Standings</div>
+          <div class="nav-item"><div class="nav-icon"></div>League</div>
+        </div>
+      </div>
+      <div class="notes">
+        <ul>
+          <li>Tap same row to expand — no separate screen</li>
+          <li>All 5 scoring categories with multipliers</li>
+          <li>Fantasy subtotal per category makes decision math visible</li>
+          <li>Series avg total at bottom — the number that matters</li>
+          <li>Rest of list stays visible — Jake can compare</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Pick confirmed -->
+    <div class="col">
+      <div class="col-label">
+        <h3>Pick Confirmed + Undo</h3>
+        <p>Success banner + 5-second undo snackbar. Unambiguous. No wondering if it registered.</p>
+      </div>
+      <div class="phone phone-tall">
+        <div class="status-bar"><span>9:41</span><span>●●●</span></div>
+        <div class="top-nav">
+          <div class="top-nav-row">
+            <div class="screen-title">Game 3 Draft</div>
+            <div class="live"><span class="live-dot"></span> LIVE</div>
+          </div>
+          <div class="screen-sub">GSW vs LAL · Q1 9:48</div>
+        </div>
+        <div class="div"></div>
+        <div class="success">
+          <div class="success-dot"></div>
+          <div>
+            <div class="success-label">Anthony Davis — Your pick is in</div>
+            <div class="success-sub">LAL · Away · pick #4 of 7</div>
+          </div>
+        </div>
+        <div class="snackbar">
+          <span>Pick submitted</span>
+          <span class="snackbar-undo">Undo (4s)</span>
+        </div>
+        <div class="sec-hdr">Draft Feed</div>
+        <div class="scroll">
+          <div class="feed-item">
+            <div class="feed-avatar">T</div>
+            <div class="feed-content">
+              <div class="feed-text"><strong>Todd</strong> picked Anthony Davis · #4</div>
+              <div class="feed-meta">Just now · LAL · Away</div>
+            </div>
+            <div class="badge badge-pick">Pick</div>
+          </div>
+          <div class="feed-item">
+            <div class="feed-avatar">F</div>
+            <div class="feed-content">
+              <div class="feed-text"><strong>Foram</strong> picked Stephen Curry · #3</div>
+              <div class="feed-meta">4 min ago · GSW · Home</div>
+            </div>
+            <div class="badge badge-pick">Pick</div>
+          </div>
+          <div class="feed-item">
+            <div class="feed-avatar">A</div>
+            <div class="feed-content">
+              <div class="feed-text"><strong>Andrew</strong> — auto-assigned Klay Thompson · #2</div>
+              <div class="feed-meta">11 min ago · preference list #1</div>
+            </div>
+            <div class="badge badge-auto">auto — pref list</div>
+          </div>
+          <div class="feed-item">
+            <div class="feed-avatar">M</div>
+            <div class="feed-content">
+              <div class="feed-text"><strong>Mark</strong> picked LeBron James · #1</div>
+              <div class="feed-meta">18 min ago · LAL · Away</div>
+            </div>
+            <div class="badge badge-pick">Pick</div>
+          </div>
+        </div>
+        <div class="bottom-nav">
+          <div class="nav-item active"><div class="nav-icon"></div>Draft</div>
+          <div class="nav-item"><div class="nav-icon"></div>Standings</div>
+          <div class="nav-item"><div class="nav-icon"></div>League</div>
+        </div>
+      </div>
+      <div class="notes">
+        <ul>
+          <li>Green success banner persists — stays until user navigates</li>
+          <li>Undo snackbar: 5-second window, then pick locks</li>
+          <li>Draft feed shows pick #position for each entry</li>
+          <li>auto — pref list badge visually distinct from manual picks</li>
+          <li>LIVE badge signals active draft state</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!--  SECTION 2: MOZGOV WINDOW                                     -->
+<!-- ============================================================ -->
+
+<div class="section">
+  <div class="section-title">Mozgov Rule Window — Corrected Copy + Full Game Credit</div>
+  <div class="grid">
+
+    <!-- Mozgov active -->
+    <div class="col">
+      <div class="col-label">
+        <h3>Mozgov Window — My Turn</h3>
+        <p>Red theme throughout. Plain-English explanation names the player and minutes. Full game credit — not second-half.</p>
+      </div>
+      <div class="phone phone-tall">
+        <div class="status-bar"><span>9:41</span><span>●●●</span></div>
+        <div class="mozgov-hdr">
+          <div class="mozgov-title">Mozgov Rule Triggered</div>
+          <div class="mozgov-desc">LeBron James played 3 min in the first half. Pick a replacement — they earn full game fantasy credit, every stat counts.</div>
+          <div class="mozgov-timer">11:42</div>
+          <div class="mozgov-timer-label">minutes remaining at halftime</div>
+        </div>
+        <div class="sec-hdr">Pick a Replacement</div>
+        <div class="scroll">
+          <div class="player-row selected">
+            <div class="p-avatar orange">AD</div>
+            <div class="p-info">
+              <div class="p-name">Anthony Davis</div>
+              <div class="p-meta">LAL · Away · 5+ min last game</div>
+            </div>
+            <div class="p-right"><div class="p-avg">28.3</div><div class="p-last">22 last game</div></div>
+          </div>
+          <div class="player-row">
+            <div class="p-avatar">SC</div>
+            <div class="p-info">
+              <div class="p-name">Stephen Curry</div>
+              <div class="p-meta">GSW · <span class="p-home">Home</span> · 5+ min last game</div>
+            </div>
+            <div class="p-right"><div class="p-avg">34.1</div><div class="p-last">28 last game</div></div>
+          </div>
+          <div class="player-row">
+            <div class="p-avatar">KT</div>
+            <div class="p-info">
+              <div class="p-name">Klay Thompson</div>
+              <div class="p-meta">GSW · <span class="p-home">Home</span> · 5+ min last game</div>
+            </div>
+            <div class="p-right"><div class="p-avg">19.4</div><div class="p-last">16 last game</div></div>
+          </div>
+          <div class="player-row">
+            <div class="p-avatar">DG</div>
+            <div class="p-info">
+              <div class="p-name">Draymond Green</div>
+              <div class="p-meta">GSW · <span class="p-home">Home</span> · 5+ min last game</div>
+            </div>
+            <div class="p-right"><div class="p-avg">9.2</div><div class="p-last">11 last game</div></div>
+          </div>
+        </div>
+        <div class="sp"></div>
+        <button class="btn-primary red">Replace with Anthony Davis</button>
+        <div class="sp"></div>
+        <div class="active-bar red">
+          <div>
+            <div class="bar-label red">Mozgov Window Open</div>
+            <div class="bar-sub">LeBron voided · 11 min 42 sec remaining</div>
+          </div>
+          <div class="clock red"><span class="clock-dot"></span> 11:42</div>
+        </div>
+        <div class="bottom-nav">
+          <div class="nav-item active"><div class="nav-icon"></div>Draft</div>
+          <div class="nav-item"><div class="nav-icon"></div>Standings</div>
+          <div class="nav-item"><div class="nav-icon"></div>League</div>
+        </div>
+      </div>
+      <div class="notes">
+        <ul>
+          <li>Notification copy named the player + minutes before app opened</li>
+          <li>Header echoes this — no extra "what is this?" moment</li>
+          <li>Timer (36px extrabold red) is the largest element in the header</li>
+          <li>Eligible list filtered: active + 5+ min last active game + not used by me</li>
+          <li>Replace button red — same urgency palette as the window</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Mozgov confirmed -->
+    <div class="col">
+      <div class="col-label">
+        <h3>Mozgov Confirmed</h3>
+        <p>Both sides explicit: original voided + replacement earns full game credit across all stat categories.</p>
+      </div>
+      <div class="phone phone-auto">
+        <div class="status-bar"><span>9:41</span><span>●●●</span></div>
+        <div class="top-nav">
+          <div class="top-nav-row">
+            <div class="screen-title">Game 3 Draft</div>
+            <div class="live"><span class="live-dot"></span> Q2</div>
+          </div>
+          <div class="screen-sub">GSW vs LAL · Halftime over</div>
+        </div>
+        <div class="div"></div>
+        <div class="success" style="background:rgba(34,197,94,0.1);border-color:rgba(34,197,94,0.25);">
+          <div class="success-dot"></div>
+          <div>
+            <div class="success-label">Anthony Davis — Replacement locked</div>
+            <div class="success-sub">LeBron's stats voided · Anthony earns full game fantasy credit — every point, rebound, assist, block, and steal counts</div>
+          </div>
+        </div>
+        <div class="snackbar">
+          <span>Replacement confirmed</span>
+          <span class="snackbar-undo">Undo (4s)</span>
+        </div>
+        <div class="sec-hdr">Draft Feed</div>
+        <div class="feed-item">
+          <div class="feed-avatar">T</div>
+          <div class="feed-content">
+            <div class="feed-text"><strong>Todd</strong> — Mozgov replacement: Anthony Davis</div>
+            <div class="feed-meta">Just now · LeBron voided</div>
+          </div>
+          <div class="badge badge-mozgov">Mozgov</div>
+        </div>
+        <div class="feed-item">
+          <div class="feed-avatar">J</div>
+          <div class="feed-content">
+            <div class="feed-text"><strong>Jake</strong> picked Stephen Curry · #6</div>
+            <div class="feed-meta">34 min ago · GSW</div>
+          </div>
+          <div class="badge badge-pick">Pick</div>
+        </div>
+        <div class="sp" style="height:12px;"></div>
+        <div class="bottom-nav">
+          <div class="nav-item active"><div class="nav-icon"></div>Draft</div>
+          <div class="nav-item"><div class="nav-icon"></div>Standings</div>
+          <div class="nav-item"><div class="nav-icon"></div>League</div>
+        </div>
+      </div>
+      <div class="notes">
+        <ul>
+          <li>Success banner names both the voided and replacement player</li>
+          <li>Explicitly states all stat categories — not just "points"</li>
+          <li>Mozgov badge in feed is red — visually distinct from manual picks</li>
+          <li>Feed shows "LeBron voided" inline — no ambiguity about what happened</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Mozgov waiting -->
+    <div class="col">
+      <div class="col-label">
+        <h3>Mozgov — Waiting State</h3>
+        <p>Multiple triggers. Player #5 in draft order sees this while #1–4 select. Eligible list visible but locked.</p>
+      </div>
+      <div class="phone phone-auto">
+        <div class="status-bar"><span>9:41</span><span>●●●</span></div>
+        <div class="mozgov-hdr">
+          <div class="mozgov-title">Mozgov Rule Triggered</div>
+          <div class="mozgov-desc">Your player (Klay Thompson) played 2 min in the first half. Waiting for Chris to select first — then it's your turn.</div>
+          <div class="mozgov-timer">09:14</div>
+          <div class="mozgov-timer-label">minutes remaining at halftime</div>
+        </div>
+        <div class="sec-hdr" style="display:flex;align-items:center;justify-content:space-between;padding-right:16px;">
+          <span>Eligible Players</span>
+          <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;">Locked until your turn</span>
+        </div>
+        <div class="player-row" style="opacity:0.5;pointer-events:none;">
+          <div class="p-avatar">AD</div>
+          <div class="p-info"><div class="p-name">Anthony Davis</div><div class="p-meta">LAL · Away</div></div>
+          <div class="p-right"><div class="p-avg">28.3</div></div>
+        </div>
+        <div class="player-row" style="opacity:0.5;pointer-events:none;">
+          <div class="p-avatar">SC</div>
+          <div class="p-info"><div class="p-name">Stephen Curry</div><div class="p-meta">GSW · <span class="p-home">Home</span></div></div>
+          <div class="p-right"><div class="p-avg">34.1</div></div>
+        </div>
+        <div class="player-row" style="opacity:0.5;pointer-events:none;">
+          <div class="p-avatar">LJ</div>
+          <div class="p-info"><div class="p-name">LeBron James</div><div class="p-meta">LAL · Away</div></div>
+          <div class="p-right"><div class="p-avg">26.1</div></div>
+        </div>
+        <div class="sp"></div>
+        <div class="active-bar red">
+          <div>
+            <div class="bar-label red">Waiting for Chris</div>
+            <div class="bar-sub">You're next · 9 min 14 sec remaining</div>
+          </div>
+          <div class="clock red"><span class="clock-dot"></span> 09:14</div>
+        </div>
+        <div class="bottom-nav">
+          <div class="nav-item active"><div class="nav-icon"></div>Draft</div>
+          <div class="nav-item"><div class="nav-icon"></div>Standings</div>
+          <div class="nav-item"><div class="nav-icon"></div>League</div>
+        </div>
+      </div>
+      <div class="notes">
+        <ul>
+          <li>Draft-order priority: Chris picked earlier, selects first</li>
+          <li>Eligible list visible but locked — no false affordance</li>
+          <li>Countdown still visible — shows shared urgency window</li>
+          <li>If Chris selects a player, that player disappears from this list</li>
+          <li>ActiveStateBar names who they're waiting for</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!--  SECTION 3: STANDINGS                                         -->
+<!-- ============================================================ -->
+
+<div class="section">
+  <div class="section-title">Standings — Full Stat Breakdown with Category Leaders</div>
+  <div class="grid">
+
+    <div class="col">
+      <div class="col-label">
+        <h3>Game 3 Standings</h3>
+        <p>Per-game stat breakdown for every participant's player. Category leaders highlighted in orange. Series total below.</p>
+      </div>
+      <div class="phone phone-auto">
+        <div class="status-bar"><span>9:41</span><span>●●●</span></div>
+        <div class="top-nav">
+          <div class="top-nav-row">
+            <div class="screen-title">Standings</div>
+            <div class="live"><span class="live-dot"></span> FINAL</div>
+          </div>
+          <div class="screen-sub">Game 3 of 7 · GSW vs LAL</div>
+        </div>
+        <div class="div"></div>
+        <div class="sec-hdr">Game 3 Results</div>
+        <div style="overflow-x:auto;flex-shrink:0;">
+          <table class="stat-grid" style="margin:0 0 0 0;width:100%;">
+            <thead>
+              <tr>
+                <th>Player</th>
+                <th>Pick</th>
+                <th>Pts</th>
+                <th>Reb</th>
+                <th>Ast</th>
+                <th>Stl</th>
+                <th>Blk</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Tyler</td>
+                <td>S. Curry</td>
+                <td class="leader">38</td>
+                <td>5</td>
+                <td class="leader">8</td>
+                <td>1</td>
+                <td>0</td>
+                <td class="leader">75</td>
+              </tr>
+              <tr>
+                <td>Jake</td>
+                <td>A. Davis</td>
+                <td>31</td>
+                <td class="leader">10</td>
+                <td>2</td>
+                <td>1</td>
+                <td class="leader">2</td>
+                <td>61</td>
+              </tr>
+              <tr>
+                <td>Foram</td>
+                <td>LeBron</td>
+                <td>28</td>
+                <td>7</td>
+                <td>6</td>
+                <td>2</td>
+                <td>1</td>
+                <td>58</td>
+              </tr>
+              <tr>
+                <td>Todd</td>
+                <td>K. Thompson</td>
+                <td>22</td>
+                <td>4</td>
+                <td>3</td>
+                <td class="leader">3</td>
+                <td>0</td>
+                <td>49</td>
+              </tr>
+              <tr>
+                <td>Andrew</td>
+                <td style="color:var(--muted);font-style:italic;">T. Haliburton †</td>
+                <td>18</td>
+                <td>3</td>
+                <td>5</td>
+                <td>1</td>
+                <td>0</td>
+                <td>40</td>
+              </tr>
+              <tr>
+                <td>Chris</td>
+                <td>D. Green</td>
+                <td>8</td>
+                <td>6</td>
+                <td>4</td>
+                <td>2</td>
+                <td>1</td>
+                <td>36</td>
+              </tr>
+              <tr>
+                <td>Mark</td>
+                <td>A. Reaves</td>
+                <td>14</td>
+                <td>2</td>
+                <td>2</td>
+                <td>0</td>
+                <td>0</td>
+                <td>22</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="padding:6px 16px;font-size:10px;color:var(--muted);flex-shrink:0;">† auto — preference list</div>
+        <div class="div"></div>
+        <div class="sec-hdr">Series Total</div>
+        <div class="std-row"><div class="std-rank gold">1</div><div><div class="std-name">Tyler</div><div class="std-player">341 pts</div></div><div class="std-pts" style="color:var(--green);">341</div></div>
+        <div class="std-row"><div class="std-rank">2</div><div><div class="std-name">Foram</div><div class="std-player">325 pts</div></div><div class="std-pts">325</div></div>
+        <div class="std-row"><div class="std-rank">3</div><div><div class="std-name">Andrew</div><div class="std-player">322 pts</div></div><div class="std-pts">322</div></div>
+        <div class="std-row"><div class="std-rank">4</div><div><div class="std-name">Jake</div><div class="std-player">296 pts</div></div><div class="std-pts">296</div></div>
+        <div class="std-row"><div class="std-rank">5</div><div><div class="std-name">Chris</div><div class="std-player">296 pts</div></div><div class="std-pts">296</div></div>
+        <div class="std-row"><div class="std-rank">6</div><div><div class="std-name">Todd</div><div class="std-player">256 pts</div></div><div class="std-pts">256</div></div>
+        <div class="std-row"><div class="std-rank">7</div><div><div class="std-name">Mark</div><div class="std-player">256 pts</div></div><div class="std-pts">256</div></div>
+        <div class="sp" style="height:12px;"></div>
+        <div class="bottom-nav">
+          <div class="nav-item"><div class="nav-icon"></div>Draft</div>
+          <div class="nav-item active"><div class="nav-icon"></div>Standings</div>
+          <div class="nav-item"><div class="nav-icon"></div>League</div>
+        </div>
+      </div>
+      <div class="notes">
+        <ul>
+          <li>Category leaders in orange bold — multiple winners per game</li>
+          <li>Auto-assign picks footnoted inline — visible, not hidden</li>
+          <li>Series total is the definitive leaderboard</li>
+          <li>Stat columns scrollable horizontally on narrow screens</li>
+          <li>Real 2025 data — Tyler won the series with 341 pts</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Auto-assign outcome -->
+    <div class="col">
+      <div class="col-label">
+        <h3>Auto-Assign Outcome</h3>
+        <p>Andrew returns from meetings. System picked for him from his preference list. Feels like success, not absence.</p>
+      </div>
+      <div class="phone phone-tall">
+        <div class="status-bar"><span>9:41</span><span>●●●</span></div>
+        <div class="top-nav">
+          <div class="top-nav-row">
+            <div class="screen-title">Game 3 Draft</div>
+            <div class="live"><span class="live-dot"></span> Q3</div>
+          </div>
+          <div class="screen-sub">GSW vs LAL · Q3 8:14</div>
+        </div>
+        <div class="div"></div>
+        <div class="auto-card">
+          <div class="auto-label">Auto-assigned · preference list</div>
+          <div class="auto-player">Tyrese Haliburton</div>
+          <div class="auto-sub">GSW · Home · preference list position 1</div>
+          <div class="auto-reason">Your clock expired while you were away. We picked Tyrese Haliburton from your preference list — your #1 pick was available and eligible.</div>
+          <div class="auto-score">40 pts <span style="font-size:12px;font-weight:400;color:var(--muted);">so far this game</span></div>
+        </div>
+        <div class="sec-hdr">Draft Feed</div>
+        <div class="scroll">
+          <div class="feed-item">
+            <div class="feed-avatar">A</div>
+            <div class="feed-content">
+              <div class="feed-text"><strong>Andrew</strong> — auto-assigned Tyrese Haliburton · #2</div>
+              <div class="feed-meta">38 min ago · preference list #1</div>
+            </div>
+            <div class="badge badge-auto">auto — pref list</div>
+          </div>
+          <div class="feed-item">
+            <div class="feed-avatar">F</div>
+            <div class="feed-content">
+              <div class="feed-text"><strong>Foram</strong> picked Stephen Curry · #3</div>
+              <div class="feed-meta">52 min ago · GSW</div>
+            </div>
+            <div class="badge badge-pick">Pick</div>
+          </div>
+          <div class="feed-item">
+            <div class="feed-avatar">M</div>
+            <div class="feed-content">
+              <div class="feed-text"><strong>Mark</strong> picked LeBron James · #1</div>
+              <div class="feed-meta">1 hr ago · LAL</div>
+            </div>
+            <div class="badge badge-pick">Pick</div>
+          </div>
+        </div>
+        <div class="nudge">
+          Next game: update your preference list before the 9am draft opens. <a>Update list →</a>
+        </div>
+        <div class="bottom-nav">
+          <div class="nav-item active"><div class="nav-icon"></div>Draft</div>
+          <div class="nav-item"><div class="nav-icon"></div>Standings</div>
+          <div class="nav-item"><div class="nav-icon"></div>League</div>
+        </div>
+      </div>
+      <div class="notes">
+        <ul>
+          <li>Auto-card explains exactly what happened and why</li>
+          <li>Shows which preference list position was used</li>
+          <li>Live score visible immediately — Andrew sees value right away</li>
+          <li>Nudge at bottom: gentle CTA for next game prep</li>
+          <li>Feed confirms the league saw it too — no shame, just process</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div style="text-align:center;margin-top:64px;padding:24px;color:var(--muted);font-size:13px;line-height:1.6;">
+  <strong style="color:var(--text);">fantasy-finals · Updated Design Mockups</strong><br>
+  All decisions finalized: A/B hybrid rows · full stat data model · corrected Mozgov copy · standings with category leaders<br>
+  zinc-950 · orange-500 · Inter · 320px mobile · Updated 2026-03-07
+</div>
+
+</body>
+</html>

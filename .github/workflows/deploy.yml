@@ -1,0 +1,32 @@
+name: Deploy to Railway
+
+# TODO (post-MVP): Add a pre-deploy check that queries game/draft state
+# and blocks deployment during active draft windows and Mozgov halftime windows.
+# See architecture.md — "No deployments during active draft or game windows"
+# This requires the game state schema to exist (implement in a later story).
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Railway CLI
+        run: pnpm install -g @railway/cli
+
+      - name: Deploy to Railway
+        run: railway up --service=${{ secrets.RAILWAY_SERVICE_ID }}
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}

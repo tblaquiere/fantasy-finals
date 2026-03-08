@@ -1,0 +1,99 @@
+# generated: 2026-03-07
+# project: fantasy-finals
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: /Users/toddblaquiere/fantasy-finals/_bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-03-07
+project: fantasy-finals
+project_key: NOKEY
+tracking_system: file-system
+story_location: /Users/toddblaquiere/fantasy-finals/_bmad-output/implementation-artifacts
+
+development_status:
+  # Epic 1: Platform Foundation — App Shell, Auth & Infrastructure
+  epic-1: in-progress
+  1-1-project-scaffold-and-deployment-pipeline: in-progress
+  1-2-user-authentication-magic-link-and-google-oauth: backlog
+  1-3-role-based-access-control: backlog
+  1-4-app-shell-design-system-and-pwa: backlog
+  1-5-fcm-web-push-infrastructure: backlog
+  1-6-background-job-worker: backlog
+  epic-1-retrospective: optional
+
+  # Epic 2: League Management & Invitations
+  epic-2: backlog
+  2-1-create-a-league: backlog
+  2-2-generate-and-share-invite-links: backlog
+  2-3-join-a-league-via-invite-link: backlog
+  2-4-commissioner-delegation: backlog
+  2-5-multi-league-dashboard: backlog
+  2-6-admin-cross-league-panel: backlog
+  epic-2-retrospective: optional
+
+  # Epic 3: The Draft — Player Selection & Automated Flow
+  epic-3: backlog
+  3-1-nba-stats-api-integration: backlog
+  3-2-fantasy-scoring-engine: backlog
+  3-3-draft-order-generation: backlog
+  3-4-draft-window-and-selection-clock: backlog
+  3-5-eligible-player-list: backlog
+  3-6-pick-submission-and-confirmation: backlog
+  3-7-real-time-draft-feed: backlog
+  3-8-preference-list-management: backlog
+  3-9-auto-assign-on-clock-expiry: backlog
+  3-10-commissioner-pick-override: backlog
+  3-11-draft-notifications: backlog
+  3-12-series-draft-history: backlog
+  epic-3-retrospective: optional
+
+  # Epic 4: Live Game Scoring & Results Notification
+  epic-4: backlog
+  4-1-quarterly-score-updates: backlog
+  4-2-results-push-notification: backlog
+  epic-4-retrospective: optional
+
+  # Epic 5: The Mozgov Rule — Halftime Replacement Window
+  epic-5: backlog
+  5-1-halftime-detection-and-manual-mozgov-trigger: backlog
+  5-2-mozgov-replacement-window-and-sequential-clock: backlog
+  5-3-mozgov-replacement-eligibility-and-player-list: backlog
+  5-4-replacement-scoring-void-original-full-game-credit: backlog
+  epic-5-retrospective: optional
+
+  # Epic 6: Standings, Category Leaders & Post-Game Corrections
+  epic-6: backlog
+  6-1-series-leaderboard: backlog
+  6-2-per-game-stat-breakdown: backlog
+  6-3-burned-player-visibility: backlog
+  6-4-automatic-post-game-stat-corrections: backlog
+  epic-6-retrospective: optional
