@@ -25,6 +25,6 @@ jobs:
         run: pnpm install -g @railway/cli
 
       - name: Deploy to Railway
-        run: railway up --service=${{ secrets.RAILWAY_SERVICE_ID }}
+        run: railway up --service=${{ secrets.RAILWAY_SERVICE_ID }} --project=0df1a588-f1f9-4fc1-ae62-a789e28a2bd9
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
