@@ -47,7 +47,7 @@ so that the team has a runnable app and automated deployment from day one.
 - [x] Task 5: Set up GitHub Actions CI workflow (AC: #1)
   - [x] Create `.github/workflows/ci.yml` — runs on every PR: install deps, lint (`pnpm lint`), type-check (`pnpm type-check`)
   - [x] Create `.github/workflows/deploy.yml` — runs on merge to main: deploy to Railway via Railway CLI
-  - [ ] Add repository secrets: `RAILWAY_TOKEN`, `RAILWAY_SERVICE_ID` (web service) — **MANUAL: requires GitHub repo to exist**
+  - [x] Add repository secrets — N/A: Railway native GitHub deploy used; no secrets required
 
 - [x] Task 6: Document .env.example (AC: #3)
   - [x] Copy `.env` to `.env.example` with all values replaced by descriptive placeholders
@@ -300,7 +300,7 @@ claude-sonnet-4-6
   - `src/worker/index.ts` — process-alive stub with SIGTERM/SIGINT handlers; full impl in Story 1.6
   - `src/worker/jobs/` — empty directory, populated in Story 1.6
   - `.github/workflows/ci.yml` — PR lint + type-check via GitHub Actions + pnpm
-  - `.github/workflows/deploy.yml` — merge-to-main Railway deploy via CLI; includes TODO comment for game-state deploy gate (post-MVP)
+  - `.github/workflows/deploy.yml` — merge-to-main Railway deploy via CLI (later removed — Railway native GitHub deploy used instead)
   - `.env.example` — all variables documented with descriptions: DATABASE_URL, NEXTAUTH_*, GOOGLE_*, EMAIL_*, FIREBASE_* (FCM Story 1.5)
   - `src/server/services/` — empty stub directory (service implementations in later stories)
   - `src/components/{draft,standings,league,shared}/` — empty stub directories
@@ -325,9 +325,8 @@ claude-sonnet-4-6
 3. Copy `DATABASE_URL` from PostgreSQL service → Variables tab on web service
 4. Note the web service ID for `RAILWAY_SERVICE_ID` GitHub secret
 
-**Task 5 remaining — Add GitHub repository secrets:**
-- `RAILWAY_TOKEN` → Railway dashboard → Account Settings → Tokens → New Token
-- `RAILWAY_SERVICE_ID` → Railway dashboard → your web service → Settings → Service ID
+**Task 5 remaining — GitHub secrets no longer needed:**
+Railway native GitHub deploy is used; no `RAILWAY_TOKEN` or `RAILWAY_SERVICE_ID` secrets required. `deploy.yml` has been removed.
 
 **Task 7 — Run Prisma migration after Railway DB is provisioned:**
 ```bash
@@ -343,7 +342,7 @@ pnpm dev              # should load at localhost:3000 with no console errors
 ### File List
 
 - `.github/workflows/ci.yml` *(new, modified — fixed script name)*
-- `.github/workflows/deploy.yml` *(new)*
+- `.github/workflows/deploy.yml` *(created then removed — Railway native GitHub deploy used instead)*
 - `Procfile` *(new)*
 - `src/worker/index.ts` *(new)*
 - `src/worker/jobs/` *(new directory)*
@@ -361,3 +360,4 @@ pnpm dev              # should load at localhost:3000 with no console errors
 
 - 2026-03-07: Session 1 — Created CI/CD workflows, Procfile, worker stub, .env.example, stub directories, constants.ts (Agent: claude-sonnet-4-6)
 - 2026-03-08: Session 2 — Verified T3 v7.40.0 init complete; fixed ci.yml script name; rewrote .env.example with project vars; updated env.js and auth/config.ts to remove Discord defaults; 0 lint errors, 0 typecheck errors (Agent: claude-sonnet-4-6)
+- 2026-03-08: Session 3 — Removed deploy.yml; Railway native GitHub deploy used instead; Procfile + output:standalone remain as Railway build config
