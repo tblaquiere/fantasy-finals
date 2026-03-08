@@ -22,6 +22,8 @@ jobs:
 
       - name: Lint
         run: pnpm lint
+        env:
+          SKIP_ENV_VALIDATION: true
 
       - name: Type check
         run: pnpm typecheck

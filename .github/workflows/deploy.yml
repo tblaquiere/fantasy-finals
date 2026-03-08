@@ -15,14 +15,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Install Railway CLI
-        run: pnpm install -g @railway/cli
+        run: npm install -g @railway/cli
 
       - name: Deploy to Railway
         run: railway up --service=${{ secrets.RAILWAY_SERVICE_ID }} --project=0df1a588-f1f9-4fc1-ae62-a789e28a2bd9 --environment=production
