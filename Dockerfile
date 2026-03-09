@@ -22,6 +22,10 @@ ENV SKIP_ENV_VALIDATION=1
 
 RUN npm run build
 
+# Standalone output doesn't include static assets — copy them in
+RUN cp -r .next/static .next/standalone/.next/static && \
+    cp -r public .next/standalone/public
+
 ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
 
