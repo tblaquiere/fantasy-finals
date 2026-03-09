@@ -69,15 +69,21 @@ export const authConfig = {
       : []),
   ],
   adapter: PrismaAdapter(db),
+  session: {
+    // JWT strategy allows edge-compatible middleware to verify sessions
+    // without DB access. PrismaAdapter still persists User + Account records.
+    strategy: "jwt",
+  },
   pages: {
     signIn: "/sign-in",
   },
   callbacks: {
-    session: ({ session, user }) => ({
+    // With JWT strategy, token.sub is the user ID (set automatically by next-auth)
+    session: ({ session, token }) => ({
       ...session,
       user: {
         ...session.user,
-        id: user.id,
+        id: token.sub ?? "",
       },
     }),
   },
