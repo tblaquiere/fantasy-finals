@@ -1,0 +1,35 @@
+# Environment files — never bundle credentials into Docker image
+.env
+.env.local
+.env.*.local
+
+# Git
+.git
+.gitignore
+
+# Local node_modules (fresh install runs in Dockerfile)
+node_modules
+
+# Next.js build output (rebuilt in Dockerfile)
+.next
+
+# Prisma generated client (regenerated via postinstall in Dockerfile)
+generated
+
+# BMAD project management files
+_bmad
+_bmad-output
+
+# IDE and editor configs
+.cursor
+.windsurf
+.claude
+.vscode
+.idea
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+coverage

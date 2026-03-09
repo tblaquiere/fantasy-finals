@@ -9,6 +9,9 @@ COPY prisma ./prisma/
 
 # Install all deps including optional platform-specific native binaries
 # (required for @tailwindcss/oxide Linux bindings)
+# NOTE: devDependencies are included because the worker process uses ts-node at runtime.
+# TODO Story 1.6: Switch to multi-stage build after worker is compiled to JS,
+# then use --omit=dev to reduce image size.
 RUN npm install --include=optional
 
 # Copy rest of source
