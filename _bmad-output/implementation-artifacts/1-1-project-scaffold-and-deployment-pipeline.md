@@ -1,6 +1,6 @@
 # Story 1.1: Project Scaffold & Deployment Pipeline
 
-Status: in-progress
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -58,9 +58,9 @@ so that the team has a runnable app and automated deployment from day one.
   - [x] Run `prisma db push` against Railway PostgreSQL — "The database is already in sync with the Prisma schema."
   - [ ] Confirm `pnpm prisma studio` can connect to Railway DB
 
-- [ ] Task 8: Verify local development boot (AC: #3)
-  - [ ] Copy `.env.example` to `.env` and fill in local values (at minimum: DATABASE_URL pointing to Railway public URL, AUTH_SECRET)
-  - [ ] Run `pnpm dev` — confirm app loads at `localhost:3000` with no console errors
+- [x] Task 8: Verify local development boot (AC: #3)
+  - [x] Copy `.env.example` to `.env` and fill in local values (DATABASE_URL → Railway public URL, AUTH_SECRET)
+  - [x] Run `pnpm dev` — boots at localhost:3001 (port 3000 in use), Ready in 1375ms, zero console errors ✅
   - [x] Run `pnpm lint` — confirm zero lint errors
   - [x] Run `pnpm typecheck` — confirm zero TypeScript errors
 
