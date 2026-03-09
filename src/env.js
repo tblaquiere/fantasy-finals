@@ -24,12 +24,17 @@ export const env = createEnv({
     AUTH_GOOGLE_ID: z.string().optional(),
     AUTH_GOOGLE_SECRET: z.string().optional(),
 
-    // Email / Magic Link — Story 1.2
-    AUTH_EMAIL_SERVER_HOST: z.string().optional(),
-    AUTH_EMAIL_SERVER_PORT: z.string().optional(),
-    AUTH_EMAIL_SERVER_USER: z.string().optional(),
-    AUTH_EMAIL_SERVER_PASSWORD: z.string().optional(),
-    AUTH_EMAIL_FROM: z.string().optional(),
+    // Email / Magic Link — required in production; optional in local dev
+    AUTH_EMAIL_SERVER_HOST:
+      process.env.NODE_ENV === "production" ? z.string() : z.string().optional(),
+    AUTH_EMAIL_SERVER_PORT:
+      process.env.NODE_ENV === "production" ? z.string() : z.string().optional(),
+    AUTH_EMAIL_SERVER_USER:
+      process.env.NODE_ENV === "production" ? z.string() : z.string().optional(),
+    AUTH_EMAIL_SERVER_PASSWORD:
+      process.env.NODE_ENV === "production" ? z.string() : z.string().optional(),
+    AUTH_EMAIL_FROM:
+      process.env.NODE_ENV === "production" ? z.string() : z.string().optional(),
 
     // Firebase Admin — Story 1.5
     FIREBASE_ADMIN_PROJECT_ID: z.string().optional(),

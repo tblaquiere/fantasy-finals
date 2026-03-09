@@ -1,6 +1,9 @@
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { type DefaultSession, type NextAuthConfig } from "next-auth";
+import Google from "next-auth/providers/google";
+import Nodemailer from "next-auth/providers/nodemailer";
 
+import { env } from "~/env";
 import { db } from "~/server/db";
 
 /**
@@ -26,19 +29,49 @@ declare module "next-auth" {
 
 /**
  * Options for NextAuth.js used to configure adapters, providers, callbacks, etc.
- * Providers are added in Story 1.2 (Google OAuth + Magic Link email).
+ *
+ * Providers:
+ * - Nodemailer: magic link (primary) — requires AUTH_EMAIL_SERVER_* env vars
+ * - Google OAuth: optional — only registered when AUTH_GOOGLE_ID/SECRET are set
  *
  * @see https://next-auth.js.org/configuration/options
  */
 export const authConfig = {
   providers: [
-    /**
-     * Auth providers are configured in Story 1.2:
-     * - Google OAuth
-     * - Email (Magic Link via Nodemailer)
-     */
+    // Magic link (primary) — registered when email server vars are set
+    ...(env.AUTH_EMAIL_SERVER_HOST &&
+    env.AUTH_EMAIL_SERVER_PORT &&
+    env.AUTH_EMAIL_SERVER_USER &&
+    env.AUTH_EMAIL_SERVER_PASSWORD &&
+    env.AUTH_EMAIL_FROM
+      ? [
+          Nodemailer({
+            server: {
+              host: env.AUTH_EMAIL_SERVER_HOST,
+              port: Number(env.AUTH_EMAIL_SERVER_PORT),
+              auth: {
+                user: env.AUTH_EMAIL_SERVER_USER,
+                pass: env.AUTH_EMAIL_SERVER_PASSWORD,
+              },
+            },
+            from: env.AUTH_EMAIL_FROM,
+          }),
+        ]
+      : []),
+    // Google OAuth (optional) — registered when OAuth credentials are set
+    ...(env.AUTH_GOOGLE_ID && env.AUTH_GOOGLE_SECRET
+      ? [
+          Google({
+            clientId: env.AUTH_GOOGLE_ID,
+            clientSecret: env.AUTH_GOOGLE_SECRET,
+          }),
+        ]
+      : []),
   ],
   adapter: PrismaAdapter(db),
+  pages: {
+    signIn: "/sign-in",
+  },
   callbacks: {
     session: ({ session, user }) => ({
       ...session,

@@ -43,7 +43,7 @@ development_status:
   # Epic 1: Platform Foundation — App Shell, Auth & Infrastructure
   epic-1: in-progress
   1-1-project-scaffold-and-deployment-pipeline: done
-  1-2-user-authentication-magic-link-and-google-oauth: ready-for-dev
+  1-2-user-authentication-magic-link-and-google-oauth: in-progress
   1-3-role-based-access-control: backlog
   1-4-app-shell-design-system-and-pwa: backlog
   1-5-fcm-web-push-infrastructure: backlog
