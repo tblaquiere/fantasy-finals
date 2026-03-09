@@ -76,7 +76,6 @@ export const authConfig = {
   },
   pages: {
     signIn: "/sign-in",
-    verifyRequest: "/sign-in?sent=1",
   },
   callbacks: {
     // With JWT strategy, token.sub is the user ID (set automatically by next-auth)

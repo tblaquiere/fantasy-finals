@@ -1,15 +1,12 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { useState } from "react";
 import { signIn } from "next-auth/react";
 
 function SignInForm() {
-  const searchParams = useSearchParams();
-  const sent = searchParams.get("sent") === "1";
-
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleEmailSubmit(e: React.FormEvent) {
@@ -17,12 +14,18 @@ function SignInForm() {
     setLoading(true);
     setError(null);
     try {
-      await signIn("nodemailer", {
+      const result = await signIn("nodemailer", {
         email,
+        redirect: false,
         callbackUrl: "/dashboard",
-        // next-auth v5 email provider redirects to verifyRequest page;
-        // we configure that page as /sign-in?sent=1 in auth config
       });
+      if (result?.error) {
+        setError("Something went wrong. Please try again.");
+        setLoading(false);
+      } else {
+        setSent(true);
+        setLoading(false);
+      }
     } catch {
       setError("Something went wrong. Please try again.");
       setLoading(false);
@@ -114,11 +117,7 @@ function SignInForm() {
 }
 
 export default function SignInPage() {
-  return (
-    <Suspense>
-      <SignInForm />
-    </Suspense>
-  );
+  return <SignInForm />;
 }
 
 function GoogleIcon() {
