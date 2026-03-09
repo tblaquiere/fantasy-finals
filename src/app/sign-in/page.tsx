@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
 
-export default function SignInPage() {
+function SignInForm() {
+  const searchParams = useSearchParams();
+  const sent = searchParams.get("sent") === "1";
+
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleEmailSubmit(e: React.FormEvent) {
@@ -14,19 +17,14 @@ export default function SignInPage() {
     setLoading(true);
     setError(null);
     try {
-      const result = await signIn("nodemailer", {
+      await signIn("nodemailer", {
         email,
-        redirect: false,
         callbackUrl: "/dashboard",
+        // next-auth v5 email provider redirects to verifyRequest page;
+        // we configure that page as /sign-in?sent=1 in auth config
       });
-      if (result?.error) {
-        setError("Failed to send sign-in link. Please try again.");
-      } else {
-        setSent(true);
-      }
     } catch {
       setError("Something went wrong. Please try again.");
-    } finally {
       setLoading(false);
     }
   }
@@ -56,7 +54,7 @@ export default function SignInPage() {
           <div className="rounded-lg bg-zinc-800 p-4 text-center">
             <p className="font-medium text-white">Check your email</p>
             <p className="mt-1 text-sm text-zinc-400">
-              We sent a sign-in link to <span className="text-zinc-200">{email}</span>
+              We sent you a sign-in link. You can close this tab.
             </p>
           </div>
         ) : (
@@ -112,6 +110,14 @@ export default function SignInPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense>
+      <SignInForm />
+    </Suspense>
   );
 }
 
