@@ -3,7 +3,7 @@ import NextAuth from "next-auth";
 /**
  * Edge-compatible auth config — no Node.js providers or PrismaAdapter.
  * Verifies JWT session tokens using AUTH_SECRET without any DB access.
- * The full config (with nodemailer + Google + PrismaAdapter) lives in
+ * The full config (with Resend + Google + PrismaAdapter) lives in
  * src/server/auth/config.ts and runs only in the Node.js runtime.
  */
 const { auth } = NextAuth({

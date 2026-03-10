@@ -31,7 +31,7 @@ declare module "next-auth" {
  * Options for NextAuth.js used to configure adapters, providers, callbacks, etc.
  *
  * Providers:
- * - Nodemailer: magic link (primary) — requires AUTH_EMAIL_SERVER_* env vars
+ * - Resend: magic link (primary) — requires AUTH_RESEND_KEY + AUTH_EMAIL_FROM env vars
  * - Google OAuth: optional — only registered when AUTH_GOOGLE_ID/SECRET are set
  *
  * @see https://next-auth.js.org/configuration/options
