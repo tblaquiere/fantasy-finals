@@ -20,14 +20,14 @@ function SignInForm() {
         callbackUrl: "/dashboard",
       });
       if (result?.error) {
-        setError(`Error: ${result.error} (code: ${result.code ?? "none"})`);
+        setError("Something went wrong. Please try again.");
         setLoading(false);
       } else {
         setSent(true);
         setLoading(false);
       }
-    } catch (err) {
-      setError(`Caught: ${String(err)}`);
+    } catch {
+      setError("Something went wrong. Please try again.");
       setLoading(false);
     }
   }
