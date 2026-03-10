@@ -1,7 +1,7 @@
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { type DefaultSession, type NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
-import Nodemailer from "next-auth/providers/nodemailer";
+import Resend from "next-auth/providers/resend";
 
 import { env } from "~/env";
 import { db } from "~/server/db";
@@ -38,22 +38,11 @@ declare module "next-auth" {
  */
 export const authConfig = {
   providers: [
-    // Magic link (primary) — registered when email server vars are set
-    ...(env.AUTH_EMAIL_SERVER_HOST &&
-    env.AUTH_EMAIL_SERVER_PORT &&
-    env.AUTH_EMAIL_SERVER_USER &&
-    env.AUTH_EMAIL_SERVER_PASSWORD &&
-    env.AUTH_EMAIL_FROM
+    // Magic link via Resend (HTTP API — no SMTP port issues)
+    ...(env.AUTH_RESEND_KEY && env.AUTH_EMAIL_FROM
       ? [
-          Nodemailer({
-            server: {
-              host: env.AUTH_EMAIL_SERVER_HOST,
-              port: Number(env.AUTH_EMAIL_SERVER_PORT),
-              auth: {
-                user: env.AUTH_EMAIL_SERVER_USER,
-                pass: env.AUTH_EMAIL_SERVER_PASSWORD,
-              },
-            },
+          Resend({
+            apiKey: env.AUTH_RESEND_KEY,
             from: env.AUTH_EMAIL_FROM,
           }),
         ]

@@ -14,7 +14,7 @@ function SignInForm() {
     setLoading(true);
     setError(null);
     try {
-      const result = await signIn("nodemailer", {
+      const result = await signIn("resend", {
         email,
         redirect: false,
         callbackUrl: "/dashboard",

@@ -24,14 +24,8 @@ export const env = createEnv({
     AUTH_GOOGLE_ID: z.string().optional(),
     AUTH_GOOGLE_SECRET: z.string().optional(),
 
-    // Email / Magic Link — required in production; optional in local dev
-    AUTH_EMAIL_SERVER_HOST:
-      process.env.NODE_ENV === "production" ? z.string() : z.string().optional(),
-    AUTH_EMAIL_SERVER_PORT:
-      process.env.NODE_ENV === "production" ? z.string() : z.string().optional(),
-    AUTH_EMAIL_SERVER_USER:
-      process.env.NODE_ENV === "production" ? z.string() : z.string().optional(),
-    AUTH_EMAIL_SERVER_PASSWORD:
+    // Email / Magic Link via Resend — required in production; optional in local dev
+    AUTH_RESEND_KEY:
       process.env.NODE_ENV === "production" ? z.string() : z.string().optional(),
     AUTH_EMAIL_FROM:
       process.env.NODE_ENV === "production" ? z.string() : z.string().optional(),
@@ -66,10 +60,7 @@ export const env = createEnv({
     NODE_ENV: process.env.NODE_ENV,
     AUTH_GOOGLE_ID: process.env.AUTH_GOOGLE_ID,
     AUTH_GOOGLE_SECRET: process.env.AUTH_GOOGLE_SECRET,
-    AUTH_EMAIL_SERVER_HOST: process.env.AUTH_EMAIL_SERVER_HOST,
-    AUTH_EMAIL_SERVER_PORT: process.env.AUTH_EMAIL_SERVER_PORT,
-    AUTH_EMAIL_SERVER_USER: process.env.AUTH_EMAIL_SERVER_USER,
-    AUTH_EMAIL_SERVER_PASSWORD: process.env.AUTH_EMAIL_SERVER_PASSWORD,
+    AUTH_RESEND_KEY: process.env.AUTH_RESEND_KEY,
     AUTH_EMAIL_FROM: process.env.AUTH_EMAIL_FROM,
     FIREBASE_ADMIN_PROJECT_ID: process.env.FIREBASE_ADMIN_PROJECT_ID,
     FIREBASE_ADMIN_CLIENT_EMAIL: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
