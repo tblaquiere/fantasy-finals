@@ -26,8 +26,8 @@ function SignInForm() {
         setSent(true);
         setLoading(false);
       }
-    } catch {
-      setError("Something went wrong. Please try again.");
+    } catch (err) {
+      setError(`Caught: ${String(err)}`);
       setLoading(false);
     }
   }
