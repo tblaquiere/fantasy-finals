@@ -20,7 +20,7 @@ function SignInForm() {
         callbackUrl: "/dashboard",
       });
       if (result?.error) {
-        setError("Something went wrong. Please try again.");
+        setError(`Error: ${result.error} (code: ${result.code ?? "none"})`);
         setLoading(false);
       } else {
         setSent(true);
