@@ -51,7 +51,7 @@ development_status:
   epic-1-retrospective: done
 
   # Epic 2: League Management & Invitations
-  epic-2: in-progress
+  epic-2: done
   2-1-create-a-league: done
   2-2-generate-and-share-invite-links: done
   2-3-join-a-league-via-invite-link: done
