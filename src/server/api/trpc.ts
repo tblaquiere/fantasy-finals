@@ -11,6 +11,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import { ZodError } from "zod";
 
+import { type UserRole } from "generated/prisma";
 import { auth } from "~/server/auth";
 import { db } from "~/server/db";
 
@@ -131,3 +132,64 @@ export const protectedProcedure = t.procedure
       },
     });
   });
+
+/**
+ * Role-enforcement middleware factory.
+ * Throws FORBIDDEN if the authenticated user's role is not in allowedRoles.
+ * Must be chained from protectedProcedure (session.user is guaranteed non-null).
+ * Internal — used to compose commissionerProcedure and adminProcedure below.
+ */
+const enforceRole = (allowedRoles: UserRole[]) =>
+  t.middleware(({ ctx, next }) => {
+    // protectedProcedure guarantees session.user is non-null before this runs.
+    // Defensive check retained to prevent misuse if called outside that chain.
+    if (!ctx.session?.user) {
+      throw new TRPCError({ code: "UNAUTHORIZED" });
+    }
+    if (!allowedRoles.includes(ctx.session.user.role)) {
+      throw new TRPCError({ code: "FORBIDDEN" });
+    }
+    return next({
+      ctx: {
+        // Mirror the same explicit narrowing pattern as protectedProcedure
+        // so downstream handlers always receive a fully typed session.user.
+        session: { ...ctx.session, user: ctx.session.user },
+      },
+    });
+  });
+
+/**
+ * Ownership enforcement helper.
+ * Call inside a procedure handler to ensure the caller owns the requested resource.
+ * Throws FORBIDDEN if session.user.id !== resourceUserId.
+ *
+ * Deliberately a function (not middleware) because resourceUserId comes from `input`,
+ * which is only available inside the handler — not in the middleware chain.
+ *
+ * @example
+ * enforceOwner(ctx.session, input.userId); // throws FORBIDDEN if caller != owner
+ */
+export const enforceOwner = (
+  session: { user: { id: string } },
+  resourceUserId: string,
+) => {
+  if (session.user.id !== resourceUserId) {
+    throw new TRPCError({ code: "FORBIDDEN" });
+  }
+};
+
+/**
+ * Commissioner procedure — requires commissioner or admin role.
+ * Extends protectedProcedure (auth already verified) then enforces role.
+ * Use for league management operations (create, edit, override picks, etc.).
+ */
+export const commissionerProcedure = protectedProcedure
+  .use(enforceRole(["commissioner", "admin"]));
+
+/**
+ * Admin procedure — requires admin role only.
+ * Extends protectedProcedure (auth already verified) then enforces role.
+ * Use for platform-wide operations (cross-league panel, platform settings, etc.).
+ */
+export const adminProcedure = protectedProcedure
+  .use(enforceRole(["admin"]));

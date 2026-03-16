@@ -41,23 +41,23 @@ story_location: /Users/toddblaquiere/fantasy-finals/_bmad-output/implementation-
 
 development_status:
   # Epic 1: Platform Foundation — App Shell, Auth & Infrastructure
-  epic-1: in-progress
+  epic-1: done
   1-1-project-scaffold-and-deployment-pipeline: done
   1-2-user-authentication-magic-link-and-google-oauth: done
-  1-3-role-based-access-control: backlog
-  1-4-app-shell-design-system-and-pwa: backlog
-  1-5-fcm-web-push-infrastructure: backlog
-  1-6-background-job-worker: backlog
-  epic-1-retrospective: optional
+  1-3-role-based-access-control: done
+  1-4-app-shell-design-system-and-pwa: done
+  1-5-fcm-web-push-infrastructure: done
+  1-6-background-job-worker: done
+  epic-1-retrospective: done
 
   # Epic 2: League Management & Invitations
-  epic-2: backlog
-  2-1-create-a-league: backlog
-  2-2-generate-and-share-invite-links: backlog
-  2-3-join-a-league-via-invite-link: backlog
-  2-4-commissioner-delegation: backlog
-  2-5-multi-league-dashboard: backlog
-  2-6-admin-cross-league-panel: backlog
+  epic-2: in-progress
+  2-1-create-a-league: done
+  2-2-generate-and-share-invite-links: done
+  2-3-join-a-league-via-invite-link: done
+  2-4-commissioner-delegation: done
+  2-5-multi-league-dashboard: done
+  2-6-admin-cross-league-panel: done
   epic-2-retrospective: optional
 
   # Epic 3: The Draft — Player Selection & Automated Flow

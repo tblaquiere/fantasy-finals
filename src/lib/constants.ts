@@ -1,6 +1,20 @@
 // App-wide constants — populate per story
 // See architecture.md for constants referenced across the codebase
 
+// Stubbed series list — real NBA API integration in Story 3.1
+export const SERIES_STUBS = [
+  { id: "2025-wc1-okc-memphis", name: "OKC Thunder vs Memphis Grizzlies — West R1" },
+  { id: "2025-wc2-lakers-warriors", name: "Lakers vs Warriors — West R1" },
+  { id: "2025-ec1-celtics-heat", name: "Celtics vs Heat — East R1" },
+  { id: "2025-ec2-knicks-sixers", name: "Knicks vs 76ers — East R1" },
+] as const;
+
+export type SeriesId = (typeof SERIES_STUBS)[number]["id"];
+
+// Clock duration options (minutes) — up to MAX_CLOCK_MINUTES
+export const CLOCK_DURATION_OPTIONS = [15, 30, 45, 60] as const;
+export type ClockDurationMinutes = (typeof CLOCK_DURATION_OPTIONS)[number];
+
 // Mozgov Rule threshold: players with fewer than this many first-half minutes trigger the rule
 export const MOZGOV_THRESHOLD_MINUTES = 5;
 

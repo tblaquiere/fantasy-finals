@@ -1,21 +1,55 @@
-// src/worker/index.ts
-// STUB: Full implementation in Story 1.6 (Background Job Worker)
-// This file must exist for the Procfile worker process to start without crashing.
-//
-// Story 1.6 will:
-//   - Install and initialize pg-boss v12
-//   - Register job handlers: draft.open, clock.expire, halftime.check, stats.correct
-//   - Connect to Railway PostgreSQL via DATABASE_URL (same Prisma client as web server)
+import { PgBoss } from "pg-boss";
 
-console.log("Worker process started (stub — full implementation in Story 1.6)");
+import { JOB_QUEUES } from "~/lib/job-queues";
+import { handleClockExpire } from "./jobs/clock-expire";
+import { handleDraftOpen } from "./jobs/draft-open";
+import { handleHalftimeCheck } from "./jobs/halftime-check";
+import { handleStatsCorrect } from "./jobs/stats-correct";
 
-// Keep process alive so Railway doesn't restart the worker process immediately
-process.on("SIGTERM", () => {
-  console.log("Worker shutting down...");
-  process.exit(0);
-});
+async function main() {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    console.error("[worker] DATABASE_URL not set — exiting");
+    process.exit(1);
+  }
 
-process.on("SIGINT", () => {
-  console.log("Worker interrupted, shutting down...");
-  process.exit(0);
+  const boss = new PgBoss(databaseUrl);
+  boss.on("error", (err: unknown) => console.error("[worker] pg-boss error:", err));
+
+  await boss.start();
+  console.log("[worker] pg-boss started");
+
+  // createQueue MUST be called before work() in pg-boss v10+
+  for (const queue of JOB_QUEUES) {
+    await boss.createQueue(queue.name, queue);
+    console.log(`[worker] queue ready: ${queue.name}`);
+  }
+
+  // Register handlers — stubs for now; full implementations in later stories
+  await boss.work("draft.open", handleDraftOpen);
+  await boss.work("clock.expire", handleClockExpire);
+  await boss.work("halftime.check", handleHalftimeCheck);
+  await boss.work("stats.correct", handleStatsCorrect);
+  // notification.send — stub until FCM dispatch handler is implemented
+  await boss.work("notification.send", async (jobs) => {
+    const job = jobs[0];
+    if (job) console.log(`[worker] notification.send: id=${job.id}`);
+  });
+
+  console.log("[worker] all handlers registered — ready");
+
+  const shutdown = async (signal: string) => {
+    console.log(`[worker] ${signal} received — shutting down`);
+    await boss.stop({ timeout: 30_000 });
+    console.log("[worker] pg-boss stopped");
+    process.exit(0);
+  };
+
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+  process.on("SIGINT", () => void shutdown("SIGINT"));
+}
+
+main().catch((err) => {
+  console.error("[worker] fatal startup error:", err);
+  process.exit(1);
 });

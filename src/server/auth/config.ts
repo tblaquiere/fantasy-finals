@@ -1,8 +1,11 @@
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { type DefaultSession, type NextAuthConfig } from "next-auth";
+import type {} from "next-auth/jwt"; // required for JWT module augmentation below
+import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import Resend from "next-auth/providers/resend";
 
+import { type UserRole } from "generated/prisma";
 import { env } from "~/env";
 import { db } from "~/server/db";
 
@@ -16,15 +19,15 @@ declare module "next-auth" {
   interface Session extends DefaultSession {
     user: {
       id: string;
-      // ...other properties
-      // role: UserRole;
+      role: UserRole;
     } & DefaultSession["user"];
   }
+}
 
-  // interface User {
-  //   // ...other properties
-  //   // role: UserRole;
-  // }
+declare module "next-auth/jwt" {
+  interface JWT {
+    role?: UserRole;
+  }
 }
 
 /**
@@ -56,6 +59,27 @@ export const authConfig = {
           }),
         ]
       : []),
+    // Dev-only: sign in as any email without sending a magic link
+    // NEVER active in production
+    ...(process.env.NODE_ENV === "development"
+      ? [
+          Credentials({
+            id: "dev-login",
+            name: "Dev Login",
+            credentials: { email: { label: "Email", type: "email" } },
+            async authorize(credentials) {
+              if (!credentials?.email) return null;
+              const email = credentials.email as string;
+              const user = await db.user.upsert({
+                where: { email },
+                create: { email, role: "participant" },
+                update: {},
+              });
+              return { id: user.id, email: user.email, role: user.role };
+            },
+          }),
+        ]
+      : []),
   ],
   adapter: PrismaAdapter(db),
   session: {
@@ -67,12 +91,25 @@ export const authConfig = {
     signIn: "/sign-in",
   },
   callbacks: {
-    // With JWT strategy, token.sub is the user ID (set automatically by next-auth)
+    // On initial sign-in, user object is present — fetch role from DB and store in token.
+    // Subsequent requests only have the token (no DB hit required).
+    jwt: async ({ token, user }) => {
+      if (user?.id) {
+        const dbUser = await db.user.findUnique({
+          where: { id: user.id },
+          select: { role: true },
+        });
+        token.role = dbUser?.role ?? "participant";
+      }
+      return token;
+    },
+    // Propagate id and role from JWT token into the session object.
     session: ({ session, token }) => ({
       ...session,
       user: {
         ...session.user,
         id: token.sub ?? "",
+        role: token.role ?? "participant",
       },
     }),
   },

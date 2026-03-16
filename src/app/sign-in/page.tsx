@@ -1,9 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 
+const IS_DEV = process.env.NODE_ENV === "development";
+
 function SignInForm() {
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl") ?? "/dashboard";
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
@@ -17,7 +22,7 @@ function SignInForm() {
       const result = await signIn("resend", {
         email,
         redirect: false,
-        callbackUrl: "/dashboard",
+        callbackUrl,
       });
       if (result?.error) {
         setError("Something went wrong. Please try again.");
@@ -32,11 +37,34 @@ function SignInForm() {
     }
   }
 
+  async function handleDevSignIn(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await signIn("dev-login", {
+        email,
+        redirect: false,
+        callbackUrl,
+      });
+      if (result?.error) {
+        setError("Dev sign-in failed.");
+        setLoading(false);
+      } else {
+        window.location.href = callbackUrl;
+      }
+    } catch {
+      setError("Dev sign-in failed.");
+      setLoading(false);
+    }
+  }
+
   async function handleGoogleSignIn() {
     setLoading(true);
     setError(null);
     try {
-      await signIn("google", { callbackUrl: "/dashboard" });
+      await signIn("google", { callbackUrl });
     } catch {
       setError("Something went wrong. Please try again.");
       setLoading(false);
@@ -94,6 +122,24 @@ function SignInForm() {
               </button>
             </form>
 
+            {IS_DEV && (
+              <>
+                <div className="my-6 flex items-center gap-3">
+                  <div className="h-px flex-1 bg-zinc-700" />
+                  <span className="text-xs text-zinc-500">dev</span>
+                  <div className="h-px flex-1 bg-zinc-700" />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDevSignIn}
+                  disabled={loading || !email}
+                  className="w-full rounded-lg border border-dashed border-zinc-600 bg-zinc-900 px-4 py-2.5 text-sm font-medium text-zinc-400 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Dev: sign in as {email || "…"}
+                </button>
+              </>
+            )}
+
             <div className="my-6 flex items-center gap-3">
               <div className="h-px flex-1 bg-zinc-700" />
               <span className="text-xs text-zinc-500">or</span>
@@ -117,7 +163,11 @@ function SignInForm() {
 }
 
 export default function SignInPage() {
-  return <SignInForm />;
+  return (
+    <Suspense>
+      <SignInForm />
+    </Suspense>
+  );
 }
 
 function GoogleIcon() {

@@ -48,6 +48,7 @@ export const env = createEnv({
     NEXT_PUBLIC_FIREBASE_PROJECT_ID: z.string().optional(),
     NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: z.string().optional(),
     NEXT_PUBLIC_FIREBASE_APP_ID: z.string().optional(),
+    NEXT_PUBLIC_FIREBASE_VAPID_KEY: z.string().optional(),
   },
 
   /**
@@ -73,6 +74,7 @@ export const env = createEnv({
     NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID:
       process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
     NEXT_PUBLIC_FIREBASE_APP_ID: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+    NEXT_PUBLIC_FIREBASE_VAPID_KEY: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

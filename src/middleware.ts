@@ -27,6 +27,6 @@ export const config = {
      * - /_next/static, /_next/image (Next.js internals)
      * - /favicon.ico, /manifest.json, /icons/* (static + PWA assets)
      */
-    "/((?!sign-in|api/auth|_next/static|_next/image|favicon\\.ico|manifest\\.json|icons).*)",
+    "/((?!sign-in|join|api/auth|api/firebase-messaging-sw|_next/static|_next/image|favicon\\.ico|manifest\\.json|icons).*)",
   ],
 };
