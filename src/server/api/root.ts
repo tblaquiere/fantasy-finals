@@ -1,4 +1,6 @@
 import { adminRouter } from "~/server/api/routers/admin";
+import { draftRouter } from "~/server/api/routers/draft";
+import { gameRouter } from "~/server/api/routers/game";
 import { leagueRouter } from "~/server/api/routers/league";
 import { notificationRouter } from "~/server/api/routers/notification";
 import { postRouter } from "~/server/api/routers/post";
@@ -14,6 +16,8 @@ export const appRouter = createTRPCRouter({
   notification: notificationRouter,
   league: leagueRouter,
   admin: adminRouter,
+  game: gameRouter,
+  draft: draftRouter,
 });
 
 // export type definition of API

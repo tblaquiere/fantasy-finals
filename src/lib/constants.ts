@@ -1,7 +1,7 @@
 // App-wide constants — populate per story
 // See architecture.md for constants referenced across the codebase
 
-// Stubbed series list — real NBA API integration in Story 3.1
+// Stubbed series list — fallback for dev/testing when NBA API unavailable
 export const SERIES_STUBS = [
   { id: "2025-wc1-okc-memphis", name: "OKC Thunder vs Memphis Grizzlies — West R1" },
   { id: "2025-wc2-lakers-warriors", name: "Lakers vs Warriors — West R1" },
@@ -10,6 +10,13 @@ export const SERIES_STUBS = [
 ] as const;
 
 export type SeriesId = (typeof SERIES_STUBS)[number]["id"];
+
+// NBA API base URLs — Story 3.1
+// Primary: cdn.nba.com live endpoints (no IP blocking, works from cloud/Railway)
+// stats.nba.com is blocked from cloud IPs via Akamai bot protection
+export const NBA_LIVE_BASE_URL = "https://cdn.nba.com/static/json/liveData";
+export const NBA_MIN_REQUEST_INTERVAL_MS = 3000; // 3s minimum between requests
+export const NBA_REQUEST_TIMEOUT_MS = 10000; // 10s timeout per request
 
 // Clock duration options (minutes) — up to MAX_CLOCK_MINUTES
 export const CLOCK_DURATION_OPTIONS = [15, 30, 45, 60] as const;

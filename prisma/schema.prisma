@@ -97,6 +97,7 @@ model League {
 
   createdBy    User          @relation("LeagueCreator", fields: [createdById], references: [id])
   participants Participant[]
+  games        Game[]
 
   @@map("leagues")
 }
@@ -108,9 +109,131 @@ model Participant {
   isCommissioner Boolean  @default(false) @map("is_commissioner")
   joinedAt       DateTime @default(now()) @map("joined_at")
 
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  league League @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  league     League      @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  draftSlots DraftSlot[]
 
   @@unique([userId, leagueId])
   @@map("participants")
+}
+
+// ── Story 3.3: Draft Order Generation ────────────────────────────
+
+model Game {
+  id           String   @id @default(cuid())
+  leagueId     String   @map("league_id")
+  nbaGameId    String   @map("nba_game_id") // loose reference — NbaGame may not exist yet
+  gameNumber   Int      @map("game_number") // 1-based within series for this league
+  status       String   @default("pending") // pending | draft-open | active | final
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  league     League      @relation(fields: [leagueId], references: [id])
+  draftSlots DraftSlot[]
+
+  @@unique([leagueId, nbaGameId])
+  @@map("games")
+}
+
+model DraftSlot {
+  id            String   @id @default(cuid())
+  gameId        String   @map("game_id")
+  participantId String   @map("participant_id")
+  pickPosition  Int      @map("pick_position") // 1 = picks first
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  game        Game        @relation(fields: [gameId], references: [id])
+  participant Participant @relation(fields: [participantId], references: [id])
+
+  @@unique([gameId, participantId])
+  @@unique([gameId, pickPosition])
+  @@map("draft_slots")
+}
+
+// ── Story 3.1: NBA Stats API Integration ─────────────────────────
+
+model NbaSeries {
+  id            String   @id @default(cuid())
+  seriesId      String   @unique @map("series_id")
+  homeTeamId    Int      @map("home_team_id")
+  awayTeamId    Int      @map("away_team_id")
+  homeTeamName  String   @map("home_team_name")
+  awayTeamName  String   @map("away_team_name")
+  homeTricode   String   @map("home_tricode")
+  awayTricode   String   @map("away_tricode")
+  seasonYear    String   @map("season_year")
+  round         Int
+  status        String   @default("upcoming")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  games NbaGame[]
+
+  @@map("nba_series")
+}
+
+model NbaGame {
+  id             String   @id @default(cuid())
+  nbaGameId      String   @unique @map("nba_game_id")
+  seriesDbId     String   @map("series_db_id")
+  gameDate       DateTime @map("game_date")
+  status         String   @default("scheduled")
+  period         Int      @default(0)
+  gameClock      String?  @map("game_clock")
+  homeTeamScore  Int      @default(0) @map("home_team_score")
+  awayTeamScore  Int      @default(0) @map("away_team_score")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  series    NbaSeries  @relation(fields: [seriesDbId], references: [id])
+  boxScores BoxScore[]
+
+  @@map("nba_games")
+}
+
+model NbaPlayer {
+  id           String   @id @default(cuid())
+  nbaPlayerId  Int      @unique @map("nba_player_id")
+  firstName    String   @map("first_name")
+  familyName   String   @map("family_name")
+  teamId       Int      @map("team_id")
+  teamTricode  String   @map("team_tricode")
+  position     String   @default("")
+  jersey       String   @default("")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  boxScores BoxScore[]
+
+  @@map("nba_players")
+}
+
+model BoxScore {
+  id                    String   @id @default(cuid())
+  nbaGameId             String   @map("nba_game_id")
+  nbaPlayerId           Int      @map("nba_player_id")
+  minutes               Int      @default(0)
+  points                Int      @default(0)
+  rebounds               Int      @default(0)
+  assists               Int      @default(0)
+  steals                Int      @default(0)
+  blocks                Int      @default(0)
+  fantasyPoints         Int      @default(0) @map("fantasy_points")
+  period                Int      @default(0)
+  isFinal               Boolean  @default(false) @map("is_final")
+  correctedPoints       Int?     @map("corrected_points")
+  correctedRebounds     Int?     @map("corrected_rebounds")
+  correctedAssists      Int?     @map("corrected_assists")
+  correctedSteals       Int?     @map("corrected_steals")
+  correctedBlocks       Int?     @map("corrected_blocks")
+  correctedFantasyPoints Int?    @map("corrected_fantasy_points")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  game   NbaGame   @relation(fields: [nbaGameId], references: [nbaGameId])
+  player NbaPlayer @relation(fields: [nbaPlayerId], references: [nbaPlayerId])
+
+  @@unique([nbaGameId, nbaPlayerId])
+  @@map("box_scores")
 }

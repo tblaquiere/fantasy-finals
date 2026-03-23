@@ -1,28 +1,12 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { type PrismaClient } from "generated/prisma";
 import { createTRPCRouter, adminProcedure, commissionerProcedure, protectedProcedure, publicProcedure } from "~/server/api/trpc";
+import { enforceLeagueCommissioner } from "~/server/api/helpers";
 import { CLOCK_DURATION_OPTIONS, SERIES_STUBS } from "~/lib/constants";
 
 const seriesIds = SERIES_STUBS.map((s) => s.id) as [string, ...string[]];
 const validClockMinutes = new Set<number>(CLOCK_DURATION_OPTIONS);
-
-/** Verify caller is the commissioner of a specific league. Admins bypass. */
-async function enforceLeagueCommissioner(
-  db: PrismaClient,
-  userId: string,
-  leagueId: string,
-  isAdmin: boolean,
-) {
-  if (isAdmin) return;
-  const member = await db.participant.findUnique({
-    where: { userId_leagueId: { userId, leagueId } },
-  });
-  if (!member?.isCommissioner) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Not a commissioner of this league" });
-  }
-}
 
 export const leagueRouter = createTRPCRouter({
   getAllLeagues: adminProcedure
