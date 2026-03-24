@@ -65,7 +65,7 @@ development_status:
   3-1-nba-stats-api-integration: done
   3-2-fantasy-scoring-engine: done
   3-3-draft-order-generation: done
-  3-4-draft-window-and-selection-clock: backlog
+  3-4-draft-window-and-selection-clock: complete
   3-5-eligible-player-list: backlog
   3-6-pick-submission-and-confirmation: backlog
   3-7-real-time-draft-feed: backlog

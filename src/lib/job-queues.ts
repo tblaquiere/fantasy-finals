@@ -36,6 +36,14 @@ export const JOB_QUEUES = [
     deleteAfterSeconds: 604800, // 7 days — keep for audit
   },
   {
+    name: "draft.order-publish",
+    retryLimit: 3,
+    retryDelay: 30,
+    retryBackoff: true,
+    expireInSeconds: 300,
+    deleteAfterSeconds: 604800, // 7 days
+  },
+  {
     name: "notification.send",
     retryLimit: 2,
     retryDelay: 30,

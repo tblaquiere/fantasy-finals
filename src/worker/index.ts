@@ -3,6 +3,7 @@ import { PgBoss } from "pg-boss";
 import { JOB_QUEUES } from "~/lib/job-queues";
 import { handleClockExpire } from "./jobs/clock-expire";
 import { handleDraftOpen } from "./jobs/draft-open";
+import { handleDraftOrderPublish } from "./jobs/draft-order-publish";
 import { handleHalftimeCheck } from "./jobs/halftime-check";
 import { handleStatsCorrect } from "./jobs/stats-correct";
 
@@ -26,6 +27,7 @@ async function main() {
   }
 
   // Register handlers — stubs for now; full implementations in later stories
+  await boss.work("draft.order-publish", handleDraftOrderPublish);
   await boss.work("draft.open", handleDraftOpen);
   await boss.work("clock.expire", handleClockExpire);
   await boss.work("halftime.check", handleHalftimeCheck);

@@ -1,7 +1,7 @@
 import type { Job } from "pg-boss";
 
 export type ClockExpirePayload = {
-  pickId: string;
+  slotId: string;
   leagueId: string;
   gameId: string;
 };
@@ -13,6 +13,6 @@ export async function handleClockExpire(
   const job = jobs[0];
   if (!job) return;
   console.log(
-    `[worker] clock.expire: pickId=${job.data.pickId} leagueId=${job.data.leagueId} gameId=${job.data.gameId}`,
+    `[worker] clock.expire: slotId=${job.data.slotId} leagueId=${job.data.leagueId} gameId=${job.data.gameId}`,
   );
 }
