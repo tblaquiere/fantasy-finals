@@ -44,6 +44,14 @@ export const JOB_QUEUES = [
     deleteAfterSeconds: 604800, // 7 days
   },
   {
+    name: "scores.poll",
+    retryLimit: 2,
+    retryDelay: 15,
+    retryBackoff: false,
+    expireInSeconds: 45,
+    deleteAfterSeconds: 86400, // 1 day — high-frequency polling
+  },
+  {
     name: "notification.send",
     retryLimit: 2,
     retryDelay: 30,

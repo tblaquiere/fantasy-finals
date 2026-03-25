@@ -5,6 +5,8 @@ import { handleClockExpire } from "./jobs/clock-expire";
 import { handleDraftOpen } from "./jobs/draft-open";
 import { handleDraftOrderPublish } from "./jobs/draft-order-publish";
 import { handleHalftimeCheck } from "./jobs/halftime-check";
+import { handleNotificationSend } from "./jobs/notification-send";
+import { handleScoresPoll } from "./jobs/scores-poll";
 import { handleStatsCorrect } from "./jobs/stats-correct";
 
 async function main() {
@@ -31,12 +33,9 @@ async function main() {
   await boss.work("draft.open", handleDraftOpen);
   await boss.work("clock.expire", handleClockExpire);
   await boss.work("halftime.check", handleHalftimeCheck);
+  await boss.work("scores.poll", handleScoresPoll);
   await boss.work("stats.correct", handleStatsCorrect);
-  // notification.send — stub until FCM dispatch handler is implemented
-  await boss.work("notification.send", async (jobs) => {
-    const job = jobs[0];
-    if (job) console.log(`[worker] notification.send: id=${job.id}`);
-  });
+  await boss.work("notification.send", handleNotificationSend);
 
   console.log("[worker] all handlers registered — ready");
 

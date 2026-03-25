@@ -77,9 +77,9 @@ development_status:
   epic-3-retrospective: optional
 
   # Epic 4: Live Game Scoring & Results Notification
-  epic-4: backlog
-  4-1-quarterly-score-updates: backlog
-  4-2-results-push-notification: backlog
+  epic-4: done
+  4-1-quarterly-score-updates: done
+  4-2-results-push-notification: done
   epic-4-retrospective: optional
 
   # Epic 5: The Mozgov Rule — Halftime Replacement Window
