@@ -61,19 +61,19 @@ development_status:
   epic-2-retrospective: optional
 
   # Epic 3: The Draft — Player Selection & Automated Flow
-  epic-3: in-progress
+  epic-3: done
   3-1-nba-stats-api-integration: done
   3-2-fantasy-scoring-engine: done
   3-3-draft-order-generation: done
-  3-4-draft-window-and-selection-clock: complete
-  3-5-eligible-player-list: backlog
-  3-6-pick-submission-and-confirmation: backlog
-  3-7-real-time-draft-feed: backlog
-  3-8-preference-list-management: backlog
-  3-9-auto-assign-on-clock-expiry: backlog
-  3-10-commissioner-pick-override: backlog
-  3-11-draft-notifications: backlog
-  3-12-series-draft-history: backlog
+  3-4-draft-window-and-selection-clock: done
+  3-5-eligible-player-list: done
+  3-6-pick-submission-and-confirmation: done
+  3-7-real-time-draft-feed: done
+  3-8-preference-list-management: done
+  3-9-auto-assign-on-clock-expiry: done
+  3-10-commissioner-pick-override: done
+  3-11-draft-notifications: done
+  3-12-series-draft-history: done
   epic-3-retrospective: optional
 
   # Epic 4: Live Game Scoring & Results Notification

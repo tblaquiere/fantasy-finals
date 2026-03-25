@@ -2,6 +2,7 @@ import "~/styles/globals.css";
 
 import { type Metadata, type Viewport } from "next";
 import { Inter } from "next/font/google";
+import { Toaster } from "sonner";
 
 import { TRPCReactProvider } from "~/trpc/react";
 
@@ -28,6 +29,13 @@ export default function RootLayout({
     <html lang="en" className={`dark ${inter.variable}`}>
       <body>
         <TRPCReactProvider>{children}</TRPCReactProvider>
+        <Toaster
+          theme="dark"
+          position="bottom-center"
+          toastOptions={{
+            style: { background: "#18181b", border: "1px solid #27272a", color: "#fafafa" },
+          }}
+        />
       </body>
     </html>
   );

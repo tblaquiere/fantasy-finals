@@ -95,9 +95,11 @@ model League {
   createdAt            DateTime      @default(now()) @map("created_at")
   updatedAt            DateTime      @updatedAt @map("updated_at")
 
-  createdBy    User          @relation("LeagueCreator", fields: [createdById], references: [id])
-  participants Participant[]
-  games        Game[]
+  createdBy       User                @relation("LeagueCreator", fields: [createdById], references: [id])
+  participants    Participant[]
+  games           Game[]
+  picks           Pick[]
+  preferenceItems PreferenceListItem[]
 
   @@map("leagues")
 }
@@ -109,9 +111,11 @@ model Participant {
   isCommissioner Boolean  @default(false) @map("is_commissioner")
   joinedAt       DateTime @default(now()) @map("joined_at")
 
-  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  league     League      @relation(fields: [leagueId], references: [id], onDelete: Cascade)
-  draftSlots DraftSlot[]
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  league          League              @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  draftSlots      DraftSlot[]
+  picks           Pick[]
+  preferenceItems PreferenceListItem[]
 
   @@unique([userId, leagueId])
   @@map("participants")
@@ -133,6 +137,7 @@ model Game {
 
   league     League      @relation(fields: [leagueId], references: [id])
   draftSlots DraftSlot[]
+  picks      Pick[]
 
   @@unique([leagueId, nbaGameId])
   @@map("games")
@@ -151,9 +156,55 @@ model DraftSlot {
   game        Game        @relation(fields: [gameId], references: [id])
   participant Participant @relation(fields: [participantId], references: [id])
 
+  pick Pick?
+
   @@unique([gameId, participantId])
   @@unique([gameId, pickPosition])
   @@map("draft_slots")
+}
+
+// ── Story 3.5: Pick (eligible player list needs this for eligibility queries) ─
+
+model Pick {
+  id            String   @id @default(cuid())
+  draftSlotId   String   @unique @map("draft_slot_id")
+  nbaPlayerId   Int      @map("nba_player_id")
+  participantId String   @map("participant_id")
+  gameId        String   @map("game_id")
+  leagueId      String   @map("league_id")
+  method        String   @default("manual") // manual | auto-preference | auto-system
+  confirmed     Boolean  @default(false)
+  overridden    Boolean  @default(false) // true if commissioner overrode the pick
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  draftSlot   DraftSlot   @relation(fields: [draftSlotId], references: [id])
+  nbaPlayer   NbaPlayer   @relation(fields: [nbaPlayerId], references: [nbaPlayerId])
+  participant Participant @relation(fields: [participantId], references: [id])
+  game        Game        @relation(fields: [gameId], references: [id])
+  league      League      @relation(fields: [leagueId], references: [id])
+
+  @@unique([leagueId, gameId, nbaPlayerId]) // FR8(c): no double-draft in same game
+  @@map("picks")
+}
+
+// ── Story 3.8: Preference List ───────────────────────────────────
+
+model PreferenceListItem {
+  id            String   @id @default(cuid())
+  participantId String   @map("participant_id")
+  leagueId      String   @map("league_id")
+  nbaPlayerId   Int      @map("nba_player_id")
+  rank          Int      // 1 = most preferred
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  league      League      @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  nbaPlayer   NbaPlayer   @relation(fields: [nbaPlayerId], references: [nbaPlayerId])
+
+  @@unique([participantId, leagueId, nbaPlayerId])
+  @@map("preference_list_items")
 }
 
 // ── Story 3.1: NBA Stats API Integration ─────────────────────────
@@ -209,7 +260,9 @@ model NbaPlayer {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  boxScores BoxScore[]
+  boxScores       BoxScore[]
+  picks           Pick[]
+  preferenceItems PreferenceListItem[]
 
   @@map("nba_players")
 }

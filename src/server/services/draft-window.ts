@@ -1,7 +1,8 @@
 /**
- * Draft Window Service — Story 3.4
+ * Draft Window Service — Stories 3.4, 3.11
  *
- * Manages the draft window lifecycle: opening, clock advancement, and closing.
+ * Manages the draft window lifecycle: opening, clock advancement, closing,
+ * and turn notifications.
  */
 
 import type { PrismaClient } from "generated/prisma";
@@ -62,6 +63,37 @@ export async function advanceClock(
     { slotId: nextSlot.id, leagueId: game.league.id, gameId },
     { startAfter: clockExpiresAt },
   );
+
+  // Notify next participant it's their turn (Story 3.11)
+  const nextParticipant = await db.participant.findUnique({
+    where: { id: nextSlot.participantId },
+    select: { userId: true },
+  });
+  if (nextParticipant) {
+    await enqueueJob("notification.send", {
+      userId: nextParticipant.userId,
+      type: "your-turn",
+      leagueId: game.league.id,
+      gameId,
+      link: `/draft/${gameId}/pick?leagueId=${game.league.id}`,
+    });
+
+    // Schedule pick reminder for 10 min before expiry
+    const reminderAt = new Date(clockExpiresAt.getTime() - 10 * 60 * 1000);
+    if (reminderAt > now) {
+      await enqueueJob(
+        "notification.send",
+        {
+          userId: nextParticipant.userId,
+          type: "pick-reminder",
+          leagueId: game.league.id,
+          gameId,
+          link: `/draft/${gameId}/pick?leagueId=${game.league.id}`,
+        },
+        { startAfter: reminderAt },
+      );
+    }
+  }
 
   return nextSlot;
 }

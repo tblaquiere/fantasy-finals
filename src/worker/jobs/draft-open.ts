@@ -1,10 +1,12 @@
 /**
- * draft.open handler — Story 3.4
+ * draft.open handler — Stories 3.4, 3.11
  *
  * Fires at 9am PST (scheduled by draft.order-publish).
  * 1. Transitions Game status: pending → draft-open
  * 2. Starts the first participant's selection clock
  * 3. Enqueues clock.expire job for the first slot
+ * 4. Notifies all participants that draft is open (Story 3.11)
+ * 5. Notifies first participant it's their turn
  */
 
 import type { Job } from "pg-boss";
@@ -75,6 +77,53 @@ export async function handleDraftOpen(
     { slotId: firstSlot.id, leagueId, gameId },
     { startAfter: clockExpiresAt },
   );
+
+  // Notify all participants that draft is open (Story 3.11)
+  const participants = await db.participant.findMany({
+    where: { leagueId },
+    select: { userId: true, id: true },
+  });
+
+  for (const p of participants) {
+    await enqueueJob("notification.send", {
+      userId: p.userId,
+      type: "draft-open",
+      leagueId,
+      gameId,
+    });
+  }
+
+  // Notify first participant it's their turn
+  const firstParticipant = participants.find(
+    (p) => p.id === firstSlot.participantId,
+  );
+  if (firstParticipant) {
+    await enqueueJob("notification.send", {
+      userId: firstParticipant.userId,
+      type: "your-turn",
+      leagueId,
+      gameId,
+      link: `/draft/${gameId}/pick?leagueId=${leagueId}`,
+    });
+  }
+
+  // Schedule pick reminder for 10 min before expiry (Story 3.11)
+  const reminderAt = new Date(
+    clockExpiresAt.getTime() - 10 * 60 * 1000,
+  );
+  if (reminderAt > now && firstParticipant) {
+    await enqueueJob(
+      "notification.send",
+      {
+        userId: firstParticipant.userId,
+        type: "pick-reminder",
+        leagueId,
+        gameId,
+        link: `/draft/${gameId}/pick?leagueId=${leagueId}`,
+      },
+      { startAfter: reminderAt },
+    );
+  }
 
   console.log(
     `[worker] draft.open complete: first slot=${firstSlot.id} expiresAt=${clockExpiresAt.toISOString()}`,
