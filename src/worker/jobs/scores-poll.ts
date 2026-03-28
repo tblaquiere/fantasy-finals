@@ -132,6 +132,14 @@ export async function handleScoresPoll(
     });
   }
 
+  // Trigger halftime check when period >= 2 (Story 5.1)
+  if (boxScore.period >= 2 && boxScore.gameStatus === 2) {
+    // Only enqueue if no halftime.check is already pending for this game
+    await enqueueJob("halftime.check", { leagueId, gameId }).catch(() => {
+      // Ignore duplicate — halftime.check may already be running
+    });
+  }
+
   // Check if game is final (Story 4.2)
   if (boxScore.gameStatus === 3) {
     console.log(`[worker] scores.poll: game ${game.nbaGameId} is FINAL`);

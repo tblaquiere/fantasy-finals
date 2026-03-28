@@ -54,6 +54,14 @@ const NOTIFICATION_TEMPLATES: Record<
     title: "Commissioner Action Needed",
     body: "Auto-assign failed — no eligible players found. Please override manually.",
   }),
+  "mozgov-triggered": () => ({
+    title: "Mozgov Rule Triggered!",
+    body: "Your player sat the first half. You have 3 min to replace them — they earn full game credit, every point counts.",
+  }),
+  "mozgov-your-turn": () => ({
+    title: "Mozgov — Your Turn!",
+    body: "Your 3-minute replacement window is now open. Pick a replacement player!",
+  }),
 };
 
 export async function handleNotificationSend(

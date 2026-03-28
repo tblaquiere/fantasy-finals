@@ -27,6 +27,8 @@ import {
 import { nbaStatsService } from "~/server/services/nba-stats";
 import { calculateFantasyPoints } from "~/server/services/scoring";
 import { isPlayerEligibleForDraft } from "~/server/services/eligibility";
+import { enqueueJob } from "~/server/services/job-queue";
+import { startNextMozgovClock } from "~/server/services/mozgov-window";
 
 const UNDO_WINDOW_MS = 5_000;
 
@@ -233,7 +235,7 @@ export const draftRouter = createTRPCRouter({
         status: game.status,
         picks: picks.map((p) => ({
           id: p.id,
-          pickPosition: p.draftSlot.pickPosition,
+          pickPosition: p.draftSlot?.pickPosition ?? 0,
           participantName: p.participant.user.name ?? "Unknown",
           playerFirstName: p.nbaPlayer.firstName,
           playerFamilyName: p.nbaPlayer.familyName,
@@ -961,7 +963,7 @@ export const draftRouter = createTRPCRouter({
           status: game.status,
           picks: game.picks.map((p) => ({
             id: p.id,
-            pickPosition: p.draftSlot.pickPosition,
+            pickPosition: p.draftSlot?.pickPosition ?? 0,
             participantName: p.participant.user.name ?? "Unknown",
             participantUserId: p.participant.user.id,
             playerFirstName: p.nbaPlayer.firstName,
@@ -975,5 +977,185 @@ export const draftRouter = createTRPCRouter({
           ([, value]) => value,
         ),
       };
+    }),
+
+  /**
+   * Commissioner manual Mozgov trigger — Story 5.1.
+   * Opens a Mozgov replacement window for a specific participant's pick.
+   */
+  triggerMozgov: commissionerProcedure
+    .input(
+      z.object({
+        leagueId: z.string(),
+        gameId: z.string(),
+        pickId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { leagueId, gameId, pickId } = input;
+      await enforceLeagueCommissioner(
+        ctx.db,
+        ctx.session.user.id,
+        leagueId,
+        ctx.session.user.role === "admin",
+      );
+
+      const pick = await ctx.db.pick.findUnique({
+        where: { id: pickId },
+        include: {
+          participant: { select: { id: true, userId: true } },
+          draftSlot: { select: { pickPosition: true } },
+        },
+      });
+
+      if (!pick || pick.gameId !== gameId || pick.leagueId !== leagueId) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Pick not found in this game",
+        });
+      }
+
+      if (pick.voidedByMozgov) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Pick already voided by Mozgov",
+        });
+      }
+
+      // Check if window already exists
+      const existing = await ctx.db.mozgovWindow.findUnique({
+        where: {
+          gameId_participantId: {
+            gameId,
+            participantId: pick.participantId,
+          },
+        },
+      });
+
+      if (existing) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Mozgov window already exists for this participant",
+        });
+      }
+
+      // Find max order across existing windows
+      const maxOrderWindow = await ctx.db.mozgovWindow.findFirst({
+        where: { gameId },
+        orderBy: { order: "desc" },
+        select: { order: true },
+      });
+      const order = (maxOrderWindow?.order ?? 0) + 1;
+
+      await ctx.db.mozgovWindow.create({
+        data: {
+          gameId,
+          leagueId,
+          participantId: pick.participantId,
+          originalPickId: pickId,
+          order,
+          triggeredBy: "commissioner",
+        },
+      });
+
+      // Notify the participant
+      await enqueueJob("notification.send", {
+        userId: pick.participant.userId,
+        type: "mozgov-triggered",
+        leagueId,
+        gameId,
+        link: `/league/${leagueId}/game/${gameId}/mozgov`,
+      });
+
+      // Start clock if no window currently active
+      const anyActive = await ctx.db.mozgovWindow.findFirst({
+        where: { gameId, status: "active" },
+      });
+      if (!anyActive) {
+        await startNextMozgovClock(ctx.db, gameId, leagueId);
+      }
+
+      return { ok: true };
+    }),
+
+  /**
+   * Submit a Mozgov replacement pick — Story 5.2.
+   * Replaces the original player, voids the original pick,
+   * and advances to the next Mozgov window.
+   */
+  submitMozgovReplacement: protectedProcedure
+    .input(
+      z.object({
+        windowId: z.string(),
+        nbaPlayerId: z.number(),
+        leagueId: z.string(),
+        gameId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { windowId, nbaPlayerId, leagueId, gameId } = input;
+
+      const mozgovWindow = await ctx.db.mozgovWindow.findUnique({
+        where: { id: windowId },
+        include: { participant: { select: { id: true, userId: true } } },
+      });
+
+      if (!mozgovWindow) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Mozgov window not found",
+        });
+      }
+
+      if (mozgovWindow.status !== "active") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Mozgov window is not active",
+        });
+      }
+
+      // Verify caller owns this window
+      const participant = await ctx.db.participant.findUnique({
+        where: { userId_leagueId: { userId: ctx.session.user.id, leagueId } },
+      });
+
+      if (participant?.id !== mozgovWindow.participantId) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Not your Mozgov window",
+        });
+      }
+
+      // Create replacement pick
+      const replacementPick = await ctx.db.pick.create({
+        data: {
+          nbaPlayerId,
+          participantId: mozgovWindow.participantId,
+          gameId,
+          leagueId,
+          method: "mozgov-manual",
+          confirmed: true,
+        },
+      });
+
+      // Void original and complete window in transaction
+      await ctx.db.$transaction([
+        ctx.db.pick.update({
+          where: { id: mozgovWindow.originalPickId },
+          data: { voidedByMozgov: true, confirmed: false },
+        }),
+        ctx.db.mozgovWindow.update({
+          where: { id: windowId },
+          data: {
+            status: "completed",
+            replacementPickId: replacementPick.id,
+          },
+        }),
+      ]);
+
+      // Advance to next Mozgov window
+      await startNextMozgovClock(ctx.db, gameId, leagueId);
+
+      return { ok: true, pickId: replacementPick.id };
     }),
 });

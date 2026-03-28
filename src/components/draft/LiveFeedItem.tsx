@@ -16,6 +16,9 @@ interface LiveFeedItemProps {
 function getMethodLabel(method: string): string | null {
   if (method === "auto-preference") return "auto \u2014 preference list";
   if (method === "auto-system") return "auto \u2014 system";
+  if (method === "mozgov-manual") return "Mozgov";
+  if (method === "mozgov-auto-preference") return "Mozgov \u2014 auto preference";
+  if (method === "mozgov-auto-system") return "Mozgov \u2014 auto system";
   return null;
 }
 

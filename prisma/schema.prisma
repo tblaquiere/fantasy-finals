@@ -100,6 +100,7 @@ model League {
   games           Game[]
   picks           Pick[]
   preferenceItems PreferenceListItem[]
+  mozgovWindows   MozgovWindow[]
 
   @@map("leagues")
 }
@@ -116,6 +117,7 @@ model Participant {
   draftSlots      DraftSlot[]
   picks           Pick[]
   preferenceItems PreferenceListItem[]
+  mozgovWindows   MozgovWindow[]
 
   @@unique([userId, leagueId])
   @@map("participants")
@@ -135,9 +137,10 @@ model Game {
   draftOpensAt  DateTime? @map("draft_opens_at")
   draftClosesAt DateTime? @map("draft_closes_at")
 
-  league     League      @relation(fields: [leagueId], references: [id])
-  draftSlots DraftSlot[]
-  picks      Pick[]
+  league        League         @relation(fields: [leagueId], references: [id])
+  draftSlots    DraftSlot[]
+  picks         Pick[]
+  mozgovWindows MozgovWindow[]
 
   @@unique([leagueId, nbaGameId])
   @@map("games")
@@ -167,18 +170,19 @@ model DraftSlot {
 
 model Pick {
   id            String   @id @default(cuid())
-  draftSlotId   String   @unique @map("draft_slot_id")
+  draftSlotId   String?  @unique @map("draft_slot_id") // null for Mozgov replacement picks
   nbaPlayerId   Int      @map("nba_player_id")
   participantId String   @map("participant_id")
   gameId        String   @map("game_id")
   leagueId      String   @map("league_id")
-  method        String   @default("manual") // manual | auto-preference | auto-system
-  confirmed     Boolean  @default(false)
-  overridden    Boolean  @default(false) // true if commissioner overrode the pick
+  method         String   @default("manual") // manual | auto-preference | auto-system | mozgov-manual | mozgov-auto-preference | mozgov-auto-system
+  confirmed      Boolean  @default(false)
+  overridden     Boolean  @default(false) // true if commissioner overrode the pick
+  voidedByMozgov Boolean  @default(false) @map("voided_by_mozgov") // true if original pick replaced via Mozgov
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  draftSlot   DraftSlot   @relation(fields: [draftSlotId], references: [id])
+  draftSlot   DraftSlot?  @relation(fields: [draftSlotId], references: [id])
   nbaPlayer   NbaPlayer   @relation(fields: [nbaPlayerId], references: [nbaPlayerId])
   participant Participant @relation(fields: [participantId], references: [id])
   game        Game        @relation(fields: [gameId], references: [id])
@@ -205,6 +209,31 @@ model PreferenceListItem {
 
   @@unique([participantId, leagueId, nbaPlayerId])
   @@map("preference_list_items")
+}
+
+// ── Story 5.1: Mozgov Replacement Window ─────────────────────────
+
+model MozgovWindow {
+  id              String   @id @default(cuid())
+  gameId          String   @map("game_id")
+  leagueId        String   @map("league_id")
+  participantId   String   @map("participant_id")
+  originalPickId  String   @map("original_pick_id")
+  status          String   @default("pending") // pending | active | completed | expired
+  order           Int      // 1 = selects first (inverse draft order)
+  clockStartsAt   DateTime? @map("clock_starts_at")
+  clockExpiresAt  DateTime? @map("clock_expires_at")
+  replacementPickId String? @map("replacement_pick_id")
+  triggeredBy     String   @default("auto") // auto | commissioner
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  game        Game        @relation(fields: [gameId], references: [id])
+  league      League      @relation(fields: [leagueId], references: [id])
+  participant Participant @relation(fields: [participantId], references: [id])
+
+  @@unique([gameId, participantId])
+  @@map("mozgov_windows")
 }
 
 // ── Story 3.1: NBA Stats API Integration ─────────────────────────
