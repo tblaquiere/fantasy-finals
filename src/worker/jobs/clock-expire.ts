@@ -105,7 +105,7 @@ export async function handleClockExpire(
   );
 
   let selectedPlayerId: number | null = null;
-  let method: string = "auto-system";
+  let method = "auto-system";
 
   // Try preference list first
   const prefItems = await db.preferenceListItem.findMany({

@@ -24,7 +24,7 @@ export function isPlayerActive(playerStats: NbaPlayerStats): boolean {
  * DNP/injured players do NOT trigger Mozgov — only active players who failed
  * to reach the minutes threshold.
  */
-function isMozgovTriggered(playerStats: NbaPlayerStats): boolean {
+export function isMozgovTriggered(playerStats: NbaPlayerStats): boolean {
   if (!isPlayerActive(playerStats)) return false;
   return playerStats.minutes < MOZGOV_THRESHOLD_MINUTES;
 }
