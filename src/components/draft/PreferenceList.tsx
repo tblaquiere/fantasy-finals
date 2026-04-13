@@ -44,7 +44,7 @@ interface EligiblePlayer {
 
 interface PreferenceListProps {
   leagueId: string;
-  gameId: string;
+  gameId?: string;
 }
 
 function SortableItem({
@@ -214,9 +214,15 @@ export function PreferenceList({ leagueId, gameId }: PreferenceListProps) {
   }, [prefData, isDirty]);
 
   // Fetch eligible players for the add modal
+  // When gameId is available, use the live eligible players query;
+  // otherwise fall back to the series roster (always available)
   const eligibleQuery = api.draft.getEligiblePlayers.useQuery(
-    { leagueId, gameId },
-    { enabled: showAdd },
+    { leagueId, gameId: gameId! },
+    { enabled: showAdd && !!gameId },
+  );
+  const rosterQuery = api.standing.getSeriesRoster.useQuery(
+    { leagueId },
+    { enabled: showAdd && !gameId },
   );
 
   const saveMutation = api.draft.savePreferenceList.useMutation({
@@ -305,17 +311,27 @@ export function PreferenceList({ leagueId, gameId }: PreferenceListProps) {
 
   // Build eligible players list for add modal, filtering out already-in-list
   const inListIds = new Set(items.map((i) => i.nbaPlayerId));
-  const eligiblePlayers: EligiblePlayer[] =
-    eligibleQuery.data?.players
-      .filter((p) => !inListIds.has(p.nbaPlayerId))
-      .map((p) => ({
-        nbaPlayerId: p.nbaPlayerId,
-        firstName: p.firstName,
-        familyName: p.familyName,
-        teamTricode: p.teamTricode,
-        position: p.position ?? "",
-        isUsed: p.isUsed,
-      })) ?? [];
+  const eligiblePlayers: EligiblePlayer[] = gameId
+    ? (eligibleQuery.data?.players
+        .filter((p) => !inListIds.has(p.nbaPlayerId))
+        .map((p) => ({
+          nbaPlayerId: p.nbaPlayerId,
+          firstName: p.firstName,
+          familyName: p.familyName,
+          teamTricode: p.teamTricode,
+          position: p.position ?? "",
+          isUsed: p.isUsed,
+        })) ?? [])
+    : (rosterQuery.data?.players
+        .filter((p) => !inListIds.has(p.nbaPlayerId))
+        .map((p) => ({
+          nbaPlayerId: p.nbaPlayerId,
+          firstName: p.firstName,
+          familyName: p.familyName,
+          teamTricode: p.teamTricode,
+          position: p.position,
+          isUsed: p.pickedByMe,
+        })) ?? []);
 
   return (
     <div className="space-y-3">

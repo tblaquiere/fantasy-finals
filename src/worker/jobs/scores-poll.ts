@@ -165,7 +165,14 @@ export async function handleScoresPoll(
       });
     }
 
-    // Don't reschedule — game is done
+    // Start post-game stat correction polling (Story 6.4)
+    await enqueueJob(
+      "stats.correct",
+      { gameId, leagueId, finalAt: new Date().toISOString() },
+      { startAfter: new Date(Date.now() + 10 * 60 * 1000) },
+    );
+
+    // Don't reschedule scores.poll — game is done
     return;
   }
 

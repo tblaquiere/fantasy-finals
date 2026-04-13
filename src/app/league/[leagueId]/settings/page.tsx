@@ -6,6 +6,7 @@ import { createCaller } from "~/server/api/root";
 import { db } from "~/server/db";
 import { InviteLink } from "~/components/league/InviteLink";
 import { CommissionerControls } from "~/components/league/CommissionerControls";
+import { DraftControls } from "~/components/league/DraftControls";
 import { BottomNav } from "~/components/shared/BottomNav";
 
 interface Props {
@@ -64,6 +65,16 @@ export default async function LeagueSettingsPage({ params }: Props) {
               No invite link yet — use Regenerate to create one.
             </p>
           )}
+        </div>
+
+        <div className="mb-4 rounded-xl bg-zinc-900 p-4">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-400">
+            Draft Controls
+          </h2>
+          <p className="mb-3 text-xs text-zinc-500">
+            Generate draft orders, open/close draft windows, and manage games.
+          </p>
+          <DraftControls leagueId={leagueId} />
         </div>
 
         <div className="rounded-xl bg-zinc-900 p-4">

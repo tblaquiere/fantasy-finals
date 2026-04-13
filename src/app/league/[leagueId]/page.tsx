@@ -35,6 +35,16 @@ export default async function LeagueHomePage({ params }: Props) {
 
   const series = SERIES_STUBS.find((s) => s.id === league.seriesId);
 
+  // Find the next pending or drafting game for quick-access links
+  const nextGame = await db.game.findFirst({
+    where: {
+      leagueId: league.id,
+      status: { in: ["pending", "drafting"] },
+    },
+    orderBy: { gameNumber: "asc" },
+    select: { id: true, gameNumber: true, status: true },
+  });
+
   return (
     <main className="min-h-screen bg-zinc-950 pb-16 text-zinc-50">
       <div className="mx-auto max-w-xl px-4 py-6">
@@ -61,18 +71,55 @@ export default async function LeagueHomePage({ params }: Props) {
           ))}
         </ul>
 
-        {league.participants.some(
-          (p) => p.isCommissioner && p.user.id === session.user.id
-        ) && (
-          <div className="mt-6">
+        {nextGame && (
+          <div className="mt-6 rounded-xl bg-zinc-900 p-4">
+            <h2 className="mb-2 text-sm font-semibold text-zinc-300">
+              Game {nextGame.gameNumber}
+              <span className="ml-2 rounded-full bg-orange-500/20 px-2 py-0.5 text-xs text-orange-400">
+                {nextGame.status}
+              </span>
+            </h2>
+            <div className="flex flex-wrap gap-3">
+              <Link
+                href={`/draft/${nextGame.id}?leagueId=${league.id}`}
+                className="text-sm text-orange-400 underline hover:text-orange-300"
+              >
+                Draft Feed
+              </Link>
+              <Link
+                href={`/draft/${nextGame.id}/pick?leagueId=${league.id}`}
+                className="text-sm text-orange-400 underline hover:text-orange-300"
+              >
+                Pick a Player
+              </Link>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-6 flex flex-wrap gap-4">
+          <Link
+            href={`/league/${league.id}/preferences`}
+            className="text-sm text-zinc-400 underline hover:text-zinc-200"
+          >
+            Set Preferences
+          </Link>
+          <Link
+            href={`/league/${league.id}/roster`}
+            className="text-sm text-zinc-400 underline hover:text-zinc-200"
+          >
+            Series Roster
+          </Link>
+          {league.participants.some(
+            (p) => p.isCommissioner && p.user.id === session.user.id
+          ) && (
             <Link
               href={`/league/${league.id}/settings`}
               className="text-sm text-zinc-400 underline hover:text-zinc-200"
             >
               League Settings
             </Link>
-          </div>
-        )}
+          )}
+        </div>
       </div>
       <BottomNav />
     </main>
