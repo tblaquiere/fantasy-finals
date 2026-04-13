@@ -47,7 +47,6 @@ export const authConfig = {
           Resend({
             apiKey: env.AUTH_RESEND_KEY,
             from: env.AUTH_EMAIL_FROM,
-            allowDangerousEmailAccountLinking: true,
           }),
         ]
       : []),
