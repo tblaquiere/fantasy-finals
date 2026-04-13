@@ -47,6 +47,7 @@ export const authConfig = {
           Resend({
             apiKey: env.AUTH_RESEND_KEY,
             from: env.AUTH_EMAIL_FROM,
+            allowDangerousEmailAccountLinking: true,
           }),
         ]
       : []),
@@ -56,6 +57,7 @@ export const authConfig = {
           Google({
             clientId: env.AUTH_GOOGLE_ID,
             clientSecret: env.AUTH_GOOGLE_SECRET,
+            allowDangerousEmailAccountLinking: true,
           }),
         ]
       : []),
