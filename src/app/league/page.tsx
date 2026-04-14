@@ -17,28 +17,23 @@ export default async function LeagueIndexPage() {
     orderBy: { joinedAt: "desc" },
   });
 
-  // If user has exactly one league, go straight there
-  if (participations.length === 1) {
-    redirect(`/league/${participations[0]!.league.id}`);
-  }
-
   return (
     <main className="min-h-screen bg-zinc-950 pb-16 text-zinc-50">
       <div className="mx-auto max-w-xl px-4 py-6">
-        <h1 className="mb-4 text-lg font-bold text-orange-500">My Leagues</h1>
+        <div className="mb-4 flex items-center justify-between">
+          <h1 className="text-lg font-bold text-orange-500">My Leagues</h1>
+          <Link
+            href="/league/new"
+            className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-orange-500"
+          >
+            + New League
+          </Link>
+        </div>
 
         {participations.length === 0 ? (
-          <div className="space-y-4">
-            <p className="text-sm text-zinc-500">
-              You haven&apos;t joined any leagues yet.
-            </p>
-            <Link
-              href="/league/new"
-              className="inline-block rounded-xl bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-orange-500"
-            >
-              Create a League
-            </Link>
-          </div>
+          <p className="text-sm text-zinc-500">
+            You haven&apos;t joined any leagues yet.
+          </p>
         ) : (
           <ul className="space-y-2">
             {participations.map((p) => (
