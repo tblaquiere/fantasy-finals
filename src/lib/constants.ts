@@ -3,10 +3,10 @@
 
 // Stubbed series list — fallback for dev/testing when NBA API unavailable
 export const SERIES_STUBS = [
-  { id: "2025-wc1-okc-memphis", name: "OKC Thunder vs Memphis Grizzlies — West R1" },
-  { id: "2025-wc2-lakers-warriors", name: "Lakers vs Warriors — West R1" },
-  { id: "2025-ec1-celtics-heat", name: "Celtics vs Heat — East R1" },
-  { id: "2025-ec2-knicks-sixers", name: "Knicks vs 76ers — East R1" },
+  { id: "2026-ec1-raptors-cavaliers", name: "Raptors vs Cavaliers — East R1" },
+  { id: "2026-wc1-timberwolves-nuggets", name: "Timberwolves vs Nuggets — West R1" },
+  { id: "2026-ec2-hawks-knicks", name: "Hawks vs Knicks — East R1" },
+  { id: "2026-wc2-rockets-lakers", name: "Rockets vs Lakers — West R1" },
 ] as const;
 
 export type SeriesId = (typeof SERIES_STUBS)[number]["id"];
