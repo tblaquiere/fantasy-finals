@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { createTRPCRouter, adminProcedure } from "~/server/api/trpc";
+import { ensureSeriesPopulated } from "~/server/services/populate-series";
 
 export const adminRouter = createTRPCRouter({
   recalculateDraftOrder: adminProcedure
@@ -19,5 +20,21 @@ export const adminRouter = createTRPCRouter({
         status: "not_available" as const,
         message: "Draft order calculation requires Epic 3",
       };
+    }),
+
+  populateSeriesRoster: adminProcedure
+    .input(z.object({ seriesId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await ensureSeriesPopulated(ctx.db, input.seriesId);
+      const series = await ctx.db.nbaSeries.findUnique({
+        where: { seriesId: input.seriesId },
+      });
+      if (!series) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Series not found after populate" });
+      }
+      const playerCount = await ctx.db.nbaPlayer.count({
+        where: { teamId: { in: [series.homeTeamId, series.awayTeamId] } },
+      });
+      return { seriesId: input.seriesId, playerCount };
     }),
 });

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createTRPCRouter, adminProcedure, commissionerProcedure, protectedProcedure, publicProcedure } from "~/server/api/trpc";
 import { enforceLeagueCommissioner } from "~/server/api/helpers";
 import { CLOCK_DURATION_OPTIONS, SERIES_STUBS } from "~/lib/constants";
+import { ensureSeriesPopulated } from "~/server/services/populate-series";
 
 const seriesIds = SERIES_STUBS.map((s) => s.id) as [string, ...string[]];
 const validClockMinutes = new Set<number>(CLOCK_DURATION_OPTIONS);
@@ -114,6 +115,11 @@ export const leagueRouter = createTRPCRouter({
 
         return created;
       });
+
+      // Populate NbaSeries + NbaPlayer records (non-blocking — don't fail league creation)
+      void ensureSeriesPopulated(ctx.db, input.seriesId).catch((err) =>
+        console.error("[createLeague] ensureSeriesPopulated error:", err),
+      );
 
       return { leagueId: league.id };
     }),

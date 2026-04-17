@@ -8,6 +8,7 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { enforceLeagueMember } from "~/server/api/helpers";
+import { ensureSeriesPopulated } from "~/server/services/populate-series";
 
 export const standingRouter = createTRPCRouter({
   /**
@@ -401,18 +402,37 @@ export const standingRouter = createTRPCRouter({
       });
       if (!league) return { players: [], myPickedPlayerIds: [] };
 
-      const series = await ctx.db.nbaSeries.findUnique({
+      let series = await ctx.db.nbaSeries.findUnique({
         where: { seriesId: league.seriesId },
       });
+
+      // Auto-populate series + roster if missing
+      if (!series) {
+        await ensureSeriesPopulated(ctx.db, league.seriesId);
+        series = await ctx.db.nbaSeries.findUnique({
+          where: { seriesId: league.seriesId },
+        });
+      }
       if (!series) return { players: [], myPickedPlayerIds: [] };
 
       // Get all players on both teams
-      const allPlayers = await ctx.db.nbaPlayer.findMany({
+      let allPlayers = await ctx.db.nbaPlayer.findMany({
         where: {
           teamId: { in: [series.homeTeamId, series.awayTeamId] },
         },
         orderBy: [{ teamTricode: "asc" }, { familyName: "asc" }],
       });
+
+      // If no players found, try to populate from NBA API
+      if (allPlayers.length === 0) {
+        await ensureSeriesPopulated(ctx.db, league.seriesId);
+        allPlayers = await ctx.db.nbaPlayer.findMany({
+          where: {
+            teamId: { in: [series.homeTeamId, series.awayTeamId] },
+          },
+          orderBy: [{ teamTricode: "asc" }, { familyName: "asc" }],
+        });
+      }
 
       // Get current user's participant record
       const participant = await ctx.db.participant.findUnique({

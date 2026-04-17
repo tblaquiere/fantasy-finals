@@ -223,6 +223,34 @@ function mapTeam(raw: RawTeam | undefined): NbaTeamBoxScore {
   };
 }
 
+// ── Roster Types ────────────────────────────────────────────────
+
+export interface NbaRosterPlayer {
+  personId: number;
+  firstName: string;
+  familyName: string;
+  jersey: string;
+  position: string;
+  teamId: number;
+  teamTricode: string;
+}
+
+interface RawRosterPlayer {
+  PLAYER_ID?: number;
+  PLAYER?: string;
+  NUM?: string;
+  POSITION?: string;
+  TeamID?: number;
+}
+
+interface RawCommonTeamRoster {
+  resultSets?: Array<{
+    name?: string;
+    rowSet?: Array<unknown[]>;
+    headers?: string[];
+  }>;
+}
+
 // ── Service ──────────────────────────────────────────────────────
 
 export const nbaStatsService = {
@@ -310,6 +338,62 @@ export const nbaStatsService = {
       };
     } catch (error) {
       console.error("[nba-stats] getTodaysScoreboard error:", error);
+      return null;
+    }
+  },
+
+  /**
+   * Fetch team roster from stats.nba.com CommonTeamRoster endpoint.
+   * Returns null on error.
+   */
+  async getTeamRoster(
+    teamId: number,
+    teamTricode: string,
+    season: string,
+  ): Promise<NbaRosterPlayer[] | null> {
+    try {
+      const url = `https://stats.nba.com/stats/commonteamroster?TeamID=${teamId}&Season=${season}`;
+      const res = await fetch(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          Referer: "https://www.nba.com/",
+          Accept: "application/json",
+        },
+        signal: AbortSignal.timeout(15000),
+      });
+
+      if (!res.ok) {
+        console.error(`[nba-stats] getTeamRoster failed for ${teamTricode}: ${res.status}`);
+        return null;
+      }
+
+      const data = (await res.json()) as RawCommonTeamRoster;
+      const rosterSet = data.resultSets?.find((rs) => rs.name === "CommonTeamRoster");
+      if (!rosterSet?.headers || !rosterSet?.rowSet) return null;
+
+      const h = rosterSet.headers;
+      const pidIdx = h.indexOf("PLAYER_ID");
+      const nameIdx = h.indexOf("PLAYER");
+      const numIdx = h.indexOf("NUM");
+      const posIdx = h.indexOf("POSITION");
+
+      return rosterSet.rowSet.map((row): NbaRosterPlayer => {
+        const fullName = (row[nameIdx] as string) ?? "";
+        const parts = fullName.split(" ");
+        const firstName = parts[0] ?? "";
+        const familyName = parts.slice(1).join(" ") || "";
+        return {
+          personId: (row[pidIdx] as number) ?? 0,
+          firstName,
+          familyName,
+          jersey: row[numIdx] != null ? `${row[numIdx] as string | number}` : "",
+          position: (row[posIdx] as string) ?? "",
+          teamId,
+          teamTricode,
+        };
+      });
+    } catch (error) {
+      console.error(`[nba-stats] getTeamRoster error for ${teamTricode}:`, error);
       return null;
     }
   },

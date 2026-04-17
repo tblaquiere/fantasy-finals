@@ -1,12 +1,36 @@
 // App-wide constants — populate per story
 // See architecture.md for constants referenced across the codebase
 
-// Stubbed series list — fallback for dev/testing when NBA API unavailable
+// Series list with NBA team metadata for auto-populating DB records
 export const SERIES_STUBS = [
-  { id: "2026-ec1-raptors-cavaliers", name: "Raptors vs Cavaliers — East R1" },
-  { id: "2026-wc1-timberwolves-nuggets", name: "Timberwolves vs Nuggets — West R1" },
-  { id: "2026-ec2-hawks-knicks", name: "Hawks vs Knicks — East R1" },
-  { id: "2026-wc2-rockets-lakers", name: "Rockets vs Lakers — West R1" },
+  {
+    id: "2026-ec1-raptors-cavaliers",
+    name: "Raptors vs Cavaliers — East R1",
+    homeTeamId: 1610612761, homeTricode: "TOR", homeTeamName: "Toronto Raptors",
+    awayTeamId: 1610612739, awayTricode: "CLE", awayTeamName: "Cleveland Cavaliers",
+    round: 1, seasonYear: "2025-26",
+  },
+  {
+    id: "2026-wc1-timberwolves-nuggets",
+    name: "Timberwolves vs Nuggets — West R1",
+    homeTeamId: 1610612750, homeTricode: "MIN", homeTeamName: "Minnesota Timberwolves",
+    awayTeamId: 1610612743, awayTricode: "DEN", awayTeamName: "Denver Nuggets",
+    round: 1, seasonYear: "2025-26",
+  },
+  {
+    id: "2026-ec2-hawks-knicks",
+    name: "Hawks vs Knicks — East R1",
+    homeTeamId: 1610612737, homeTricode: "ATL", homeTeamName: "Atlanta Hawks",
+    awayTeamId: 1610612752, awayTricode: "NYK", awayTeamName: "New York Knicks",
+    round: 1, seasonYear: "2025-26",
+  },
+  {
+    id: "2026-wc2-rockets-lakers",
+    name: "Rockets vs Lakers — West R1",
+    homeTeamId: 1610612745, homeTricode: "HOU", homeTeamName: "Houston Rockets",
+    awayTeamId: 1610612747, awayTricode: "LAL", awayTeamName: "Los Angeles Lakers",
+    round: 1, seasonYear: "2025-26",
+  },
 ] as const;
 
 export type SeriesId = (typeof SERIES_STUBS)[number]["id"];
