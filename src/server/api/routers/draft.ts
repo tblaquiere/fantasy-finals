@@ -288,35 +288,19 @@ export const draftRouter = createTRPCRouter({
         throw new TRPCError({ code: "FORBIDDEN", message: "Not a participant" });
       }
 
-      // Verify the draft is open
-      const game = await ctx.db.game.findFirst({
-        where: { id: input.gameId, leagueId: input.leagueId },
-      });
-      if (game?.status !== "draft-open") {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Draft is not open",
-        });
-      }
-
-      // Find this participant's draft slot (they must have one and not have picked yet)
+      // Find the active draft slot for this participant (clock must be running)
+      const now = new Date();
       const activeSlot = await ctx.db.draftSlot.findFirst({
         where: {
           gameId: input.gameId,
           participantId: participant.id,
+          clockExpiresAt: { gt: now },
         },
-        include: { pick: { select: { id: true } } },
       });
       if (!activeSlot) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "You do not have a draft slot for this game",
-        });
-      }
-      if (activeSlot.pick) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "You have already submitted a pick",
+          message: "It is not your turn to pick",
         });
       }
 

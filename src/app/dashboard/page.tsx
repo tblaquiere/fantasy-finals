@@ -51,7 +51,7 @@ export default async function DashboardPage() {
         seriesName,
       };
 
-      // Check if this user still needs to pick
+      // Check if it's this user's turn (clock is running)
       if (game.status === "draft-open") {
         const myParticipant = await db.participant.findUnique({
           where: {
@@ -62,14 +62,14 @@ export default async function DashboardPage() {
           },
         });
         if (myParticipant) {
-          const mySlot = await db.draftSlot.findFirst({
+          const myActiveSlot = await db.draftSlot.findFirst({
             where: {
               gameId: game.id,
               participantId: myParticipant.id,
+              clockExpiresAt: { gt: new Date() },
             },
-            include: { pick: { select: { id: true } } },
           });
-          if (mySlot && !mySlot.pick) {
+          if (myActiveSlot) {
             needsPick = true;
           }
         }
