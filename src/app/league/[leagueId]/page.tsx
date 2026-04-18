@@ -35,15 +35,40 @@ export default async function LeagueHomePage({ params }: Props) {
 
   const series = SERIES_STUBS.find((s) => s.id === league.seriesId);
 
-  // Find the next pending or drafting game for quick-access links
+  // Find the active draft or next pending game for quick-access links
   const nextGame = await db.game.findFirst({
     where: {
       leagueId: league.id,
-      status: { in: ["pending", "drafting"] },
+      status: { in: ["pending", "draft-open"] },
     },
     orderBy: { gameNumber: "asc" },
     select: { id: true, gameNumber: true, status: true },
   });
+
+  // If a draft is open, check if it's the current user's turn
+  let isMyTurn = false;
+  if (nextGame?.status === "draft-open") {
+    const myParticipant = await db.participant.findUnique({
+      where: { userId_leagueId: { userId: session.user.id, leagueId: league.id } },
+    });
+    if (myParticipant) {
+      const activeSlot = await db.draftSlot.findFirst({
+        where: {
+          gameId: nextGame.id,
+          participantId: myParticipant.id,
+          clockExpiresAt: { gt: new Date() },
+        },
+      });
+      if (activeSlot) {
+        isMyTurn = true;
+      }
+    }
+  }
+
+  // Auto-redirect to pick page if it's my turn
+  if (isMyTurn && nextGame) {
+    redirect(`/draft/${nextGame.id}/pick?leagueId=${league.id}`);
+  }
 
   return (
     <main className="min-h-screen bg-zinc-950 pb-16 text-zinc-50">
@@ -75,8 +100,12 @@ export default async function LeagueHomePage({ params }: Props) {
           <div className="mt-6 rounded-xl bg-zinc-900 p-4">
             <h2 className="mb-2 text-sm font-semibold text-zinc-300">
               Game {nextGame.gameNumber}
-              <span className="ml-2 rounded-full bg-orange-500/20 px-2 py-0.5 text-xs text-orange-400">
-                {nextGame.status}
+              <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${
+                nextGame.status === "draft-open"
+                  ? "bg-green-500/20 text-green-400"
+                  : "bg-orange-500/20 text-orange-400"
+              }`}>
+                {nextGame.status === "draft-open" ? "Draft Open" : nextGame.status}
               </span>
             </h2>
             <div className="flex flex-wrap gap-3">
@@ -88,7 +117,7 @@ export default async function LeagueHomePage({ params }: Props) {
               </Link>
               <Link
                 href={`/draft/${nextGame.id}/pick?leagueId=${league.id}`}
-                className="text-sm text-orange-400 underline hover:text-orange-300"
+                className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-orange-400"
               >
                 Pick a Player
               </Link>

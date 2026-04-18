@@ -105,7 +105,7 @@ export function DraftControls({ leagueId }: DraftControlsProps) {
             <span
               className={cn(
                 "rounded-full px-2 py-0.5 text-[10px] font-medium",
-                game.status === "drafting"
+                game.status === "draft-open"
                   ? "bg-green-500/20 text-green-400"
                   : game.status === "active"
                     ? "bg-blue-500/20 text-blue-400"
