@@ -20,6 +20,7 @@ export function DraftControls({ leagueId }: DraftControlsProps) {
   const generateOrder = api.draft.generateDraftOrder.useMutation({
     onSuccess: () => {
       toast.success("Draft order generated");
+      void utils.standing.getLeaderboard.invalidate();
       void utils.draft.getDraftStatus.invalidate();
     },
     onError: (err) => toast.error(err.message),
@@ -28,6 +29,7 @@ export function DraftControls({ leagueId }: DraftControlsProps) {
   const openDraft = api.draft.openDraftWindow.useMutation({
     onSuccess: () => {
       toast.success("Draft window opened");
+      void utils.standing.getLeaderboard.invalidate();
       void utils.draft.getDraftStatus.invalidate();
     },
     onError: (err) => toast.error(err.message),
@@ -36,6 +38,7 @@ export function DraftControls({ leagueId }: DraftControlsProps) {
   const closeDraft = api.draft.closeDraftWindow.useMutation({
     onSuccess: () => {
       toast.success("Draft window closed");
+      void utils.standing.getLeaderboard.invalidate();
       void utils.draft.getDraftStatus.invalidate();
     },
     onError: (err) => toast.error(err.message),
@@ -51,8 +54,30 @@ export function DraftControls({ leagueId }: DraftControlsProps) {
     );
   }
 
+  const nextGameNumber = leaderboardData.games.length + 1;
+
   return (
     <div className="space-y-2">
+      {leaderboardData.games.length === 0 && (
+        <div className="rounded-xl bg-zinc-800/50 p-4 text-center">
+          <p className="mb-3 text-sm text-zinc-400">
+            No games created yet. Generate the draft order for Game 1 to get started.
+          </p>
+          <ActionButton
+            onClick={() => {
+              const nbaGameId = `game1-${leagueId.slice(0, 8)}`;
+              generateOrder.mutate({ leagueId, nbaGameId });
+            }}
+            disabled={generateOrder.isPending}
+            variant="primary"
+          >
+            {generateOrder.isPending
+              ? "Generating..."
+              : `Generate Game ${nextGameNumber} Draft Order`}
+          </ActionButton>
+        </div>
+      )}
+
       {leaderboardData.games.map((game) => (
         <div key={game.id}>
           <button
@@ -103,6 +128,23 @@ export function DraftControls({ leagueId }: DraftControlsProps) {
           )}
         </div>
       ))}
+
+      {leaderboardData.games.length > 0 && (
+        <div className="pt-2">
+          <ActionButton
+            onClick={() => {
+              const nbaGameId = `game${nextGameNumber}-${leagueId.slice(0, 8)}`;
+              generateOrder.mutate({ leagueId, nbaGameId });
+            }}
+            disabled={generateOrder.isPending}
+            variant="secondary"
+          >
+            {generateOrder.isPending
+              ? "Generating..."
+              : `+ Create Game ${nextGameNumber}`}
+          </ActionButton>
+        </div>
+      )}
     </div>
   );
 }
