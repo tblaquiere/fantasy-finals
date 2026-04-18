@@ -26,7 +26,7 @@ export default async function DashboardPage() {
     leagueName: string;
     seriesName: string;
   } | null = null;
-  let isMyTurn = false;
+  let needsPick = false;
 
   for (const league of leagues) {
     const game = await db.game.findFirst({
@@ -51,7 +51,7 @@ export default async function DashboardPage() {
         seriesName,
       };
 
-      // Check if it's the current user's turn
+      // Check if this user still needs to pick
       if (game.status === "draft-open") {
         const myParticipant = await db.participant.findUnique({
           where: {
@@ -62,28 +62,21 @@ export default async function DashboardPage() {
           },
         });
         if (myParticipant) {
-          const activeSlot = await db.draftSlot.findFirst({
+          const mySlot = await db.draftSlot.findFirst({
             where: {
               gameId: game.id,
               participantId: myParticipant.id,
-              clockExpiresAt: { gt: new Date() },
             },
+            include: { pick: { select: { id: true } } },
           });
-          if (activeSlot) {
-            isMyTurn = true;
+          if (mySlot && !mySlot.pick) {
+            needsPick = true;
           }
         }
       }
 
       break;
     }
-  }
-
-  // Auto-redirect to pick page if it's my turn
-  if (isMyTurn && activeGame) {
-    redirect(
-      `/draft/${activeGame.gameId}/pick?leagueId=${activeGame.leagueId}`,
-    );
   }
 
   return (
@@ -111,6 +104,16 @@ export default async function DashboardPage() {
             <p className="mb-4 text-xs text-zinc-500">
               {activeGame.leagueName} — {activeGame.seriesName}
             </p>
+
+            {/* Pick a Player CTA — only when user hasn't picked yet */}
+            {needsPick && (
+              <Link
+                href={`/draft/${activeGame.gameId}/pick?leagueId=${activeGame.leagueId}`}
+                className="mb-4 flex min-h-[48px] items-center justify-center rounded-xl bg-orange-500 px-4 py-3 text-base font-bold text-zinc-950 hover:bg-orange-400"
+              >
+                Pick a Player
+              </Link>
+            )}
 
             {/* Draft feed — the main content */}
             {activeGame.status === "draft-open" && (

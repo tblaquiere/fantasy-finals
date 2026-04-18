@@ -18,9 +18,10 @@
 import type { Job } from "pg-boss";
 
 import { db } from "~/server/db";
+import { SERIES_STUBS } from "~/lib/constants";
 import { enqueueJob } from "~/server/services/job-queue";
 import { advanceClock } from "~/server/services/draft-window";
-import { nbaStatsService } from "~/server/services/nba-stats";
+import { nbaStatsService, type NbaPlayerStats } from "~/server/services/nba-stats";
 import {
   isPlayerEligibleForDraft,
   isPlayerEligibleForMozgov,
@@ -78,9 +79,10 @@ export async function handleClockExpire(
     return;
   }
 
-  // Load game to get nbaGameId
+  // Load game to get nbaGameId and league seriesId
   const game = await db.game.findUniqueOrThrow({
     where: { id: gameId },
+    include: { league: { select: { seriesId: true } } },
   });
 
   // Get used players for this participant in the series
@@ -101,20 +103,62 @@ export async function handleClockExpire(
   });
   const pickedPlayerIds = new Set(gamePicks.map((p) => p.nbaPlayerId));
 
-  // Fetch live box score for eligibility checks
+  // Try live box score first; fall back to DB roster for pre-game drafts
   const boxScore = await nbaStatsService.getLiveBoxScore(game.nbaGameId);
-  if (!boxScore) {
-    console.error(
-      `[worker] clock.expire: could not fetch box score for ${game.nbaGameId}`,
-    );
-    await advanceClockSafe(gameId, slotId);
-    return;
-  }
 
-  const allPlayers = [
-    ...boxScore.homeTeam.players,
-    ...boxScore.awayTeam.players,
-  ];
+  let allPlayers: NbaPlayerStats[];
+
+  if (boxScore) {
+    allPlayers = [
+      ...boxScore.homeTeam.players,
+      ...boxScore.awayTeam.players,
+    ];
+  } else {
+    // Pre-game: use stored roster from NbaPlayer table
+    const seriesStub = SERIES_STUBS.find(
+      (s) => s.id === game.league.seriesId,
+    );
+    if (!seriesStub) {
+      console.error(
+        `[worker] clock.expire: series stub not found for ${game.league.seriesId}`,
+      );
+      await advanceClockSafe(gameId, slotId);
+      return;
+    }
+
+    const rosterPlayers = await db.nbaPlayer.findMany({
+      where: {
+        teamId: { in: [seriesStub.homeTeamId, seriesStub.awayTeamId] },
+      },
+      select: { nbaPlayerId: true },
+    });
+
+    if (rosterPlayers.length === 0) {
+      console.error(
+        `[worker] clock.expire: no roster players found for series ${game.league.seriesId}`,
+      );
+      await advanceClockSafe(gameId, slotId);
+      return;
+    }
+
+    // All rostered players are eligible pre-game
+    allPlayers = rosterPlayers.map((p): NbaPlayerStats => ({
+      personId: p.nbaPlayerId,
+      firstName: "",
+      familyName: "",
+      jerseyNum: "",
+      position: "",
+      teamId: 0,
+      teamTricode: "",
+      minutes: 0,
+      points: 0,
+      reboundsTotal: 0,
+      assists: 0,
+      steals: 0,
+      blocks: 0,
+      status: "ACTIVE",
+    }));
+  }
 
   // Build eligibility map
   const eligiblePlayers = allPlayers.filter((p) =>

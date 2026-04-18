@@ -25,6 +25,7 @@ import {
   closeDraftWindow,
 } from "~/server/services/draft-window";
 import { nbaStatsService } from "~/server/services/nba-stats";
+import { SERIES_STUBS } from "~/lib/constants";
 import { calculateFantasyPoints } from "~/server/services/scoring";
 import { isPlayerEligibleForDraft } from "~/server/services/eligibility";
 import { enqueueJob } from "~/server/services/job-queue";
@@ -287,19 +288,35 @@ export const draftRouter = createTRPCRouter({
         throw new TRPCError({ code: "FORBIDDEN", message: "Not a participant" });
       }
 
-      // Find the active draft slot for this participant
-      const now = new Date();
+      // Verify the draft is open
+      const game = await ctx.db.game.findFirst({
+        where: { id: input.gameId, leagueId: input.leagueId },
+      });
+      if (game?.status !== "draft-open") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Draft is not open",
+        });
+      }
+
+      // Find this participant's draft slot (they must have one and not have picked yet)
       const activeSlot = await ctx.db.draftSlot.findFirst({
         where: {
           gameId: input.gameId,
           participantId: participant.id,
-          clockExpiresAt: { gt: now },
         },
+        include: { pick: { select: { id: true } } },
       });
       if (!activeSlot) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "It is not your turn to pick",
+          message: "You do not have a draft slot for this game",
+        });
+      }
+      if (activeSlot.pick) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "You have already submitted a pick",
         });
       }
 
@@ -526,28 +543,127 @@ export const draftRouter = createTRPCRouter({
         });
       }
 
-      // Fetch live box score from NBA API
+      // Try live box score first; fall back to DB roster for pre-game drafts
       const boxScore = await nbaStatsService.getLiveBoxScore(game.nbaGameId);
-      if (!boxScore) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Unable to fetch live game data",
-        });
-      }
 
-      // All players from both teams
-      const allPlayers = [
-        ...boxScore.homeTeam.players.map((p) => ({
-          ...p,
-          homeAway: "home" as const,
-          teamName: boxScore.homeTeam.teamName,
-        })),
-        ...boxScore.awayTeam.players.map((p) => ({
-          ...p,
-          homeAway: "away" as const,
-          teamName: boxScore.awayTeam.teamName,
-        })),
-      ];
+      // Resolve series metadata for team names
+      const seriesStub = SERIES_STUBS.find(
+        (s) => s.id === game.league.seriesId,
+      );
+
+      let allPlayers: Array<{
+        personId: number;
+        firstName: string;
+        familyName: string;
+        jerseyNum: string;
+        position: string;
+        teamId: number;
+        teamTricode: string;
+        minutes: number;
+        points: number;
+        reboundsTotal: number;
+        assists: number;
+        steals: number;
+        blocks: number;
+        status: "ACTIVE" | "INACTIVE";
+        homeAway: "home" | "away";
+        teamName: string;
+      }>;
+
+      let teamInfo: {
+        homeTeam: { teamTricode: string; teamName: string };
+        awayTeam: { teamTricode: string; teamName: string };
+        gameStatus: number;
+        gameStatusText: string;
+      };
+
+      if (boxScore) {
+        // Live game data available
+        allPlayers = [
+          ...boxScore.homeTeam.players.map((p) => ({
+            ...p,
+            homeAway: "home" as const,
+            teamName: boxScore.homeTeam.teamName,
+          })),
+          ...boxScore.awayTeam.players.map((p) => ({
+            ...p,
+            homeAway: "away" as const,
+            teamName: boxScore.awayTeam.teamName,
+          })),
+        ];
+        teamInfo = {
+          homeTeam: {
+            teamTricode: boxScore.homeTeam.teamTricode,
+            teamName: boxScore.homeTeam.teamName,
+          },
+          awayTeam: {
+            teamTricode: boxScore.awayTeam.teamTricode,
+            teamName: boxScore.awayTeam.teamName,
+          },
+          gameStatus: boxScore.gameStatus,
+          gameStatusText: boxScore.gameStatusText,
+        };
+      } else {
+        // Pre-game: use stored roster from NbaPlayer table
+        if (!seriesStub) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Series not found for this league",
+          });
+        }
+
+        const rosterPlayers = await ctx.db.nbaPlayer.findMany({
+          where: {
+            teamId: { in: [seriesStub.homeTeamId, seriesStub.awayTeamId] },
+          },
+        });
+
+        if (rosterPlayers.length === 0) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message:
+              "No players found for this series. The roster may not have been populated yet.",
+          });
+        }
+
+        allPlayers = rosterPlayers.map((p) => ({
+          personId: p.nbaPlayerId,
+          firstName: p.firstName,
+          familyName: p.familyName,
+          jerseyNum: p.jersey,
+          position: p.position,
+          teamId: p.teamId,
+          teamTricode: p.teamTricode,
+          minutes: 0,
+          points: 0,
+          reboundsTotal: 0,
+          assists: 0,
+          steals: 0,
+          blocks: 0,
+          status: "ACTIVE" as const, // all rostered players eligible pre-game
+          homeAway:
+            p.teamId === seriesStub.homeTeamId
+              ? ("home" as const)
+              : ("away" as const),
+          teamName:
+            p.teamId === seriesStub.homeTeamId
+              ? seriesStub.homeTeamName
+              : seriesStub.awayTeamName,
+        }));
+
+        teamInfo = {
+          homeTeam: {
+            teamTricode: seriesStub.homeTricode,
+            teamName: seriesStub.homeTeamName,
+          },
+          awayTeam: {
+            teamTricode: seriesStub.awayTricode,
+            teamName: seriesStub.awayTeamName,
+          },
+          gameStatus: 1, // scheduled
+          gameStatusText: "Pre-Game",
+        };
+      }
 
       // Get all games for this league to find series game IDs
       const leagueGames = await ctx.db.game.findMany({
@@ -708,16 +824,10 @@ export const draftRouter = createTRPCRouter({
       });
 
       return {
-        gameStatus: boxScore.gameStatus,
-        gameStatusText: boxScore.gameStatusText,
-        homeTeam: {
-          teamTricode: boxScore.homeTeam.teamTricode,
-          teamName: boxScore.homeTeam.teamName,
-        },
-        awayTeam: {
-          teamTricode: boxScore.awayTeam.teamTricode,
-          teamName: boxScore.awayTeam.teamName,
-        },
+        gameStatus: teamInfo.gameStatus,
+        gameStatusText: teamInfo.gameStatusText,
+        homeTeam: teamInfo.homeTeam,
+        awayTeam: teamInfo.awayTeam,
         players,
       };
     }),
