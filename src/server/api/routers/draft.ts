@@ -96,7 +96,7 @@ export const draftRouter = createTRPCRouter({
         include: {
           participant: {
             include: {
-              user: { select: { id: true, name: true } },
+              user: { select: { id: true, name: true, email: true } },
             },
           },
         },
@@ -109,13 +109,23 @@ export const draftRouter = createTRPCRouter({
         });
       }
 
+      // Check which slots have confirmed picks
+      const picks = await ctx.db.pick.findMany({
+        where: { gameId: input.gameId, confirmed: true },
+        select: { participantId: true },
+      });
+      const pickedParticipants = new Set(picks.map((p) => p.participantId));
+
       return slots.map((slot) => ({
+        id: slot.id,
         pickPosition: slot.pickPosition,
         participantId: slot.participantId,
         userId: slot.participant.userId,
-        name: slot.participant.user.name ?? "Unknown",
+        participantName: slot.participant.user.name,
+        participantEmail: slot.participant.user.email,
         clockStartsAt: slot.clockStartsAt,
         clockExpiresAt: slot.clockExpiresAt,
+        picked: pickedParticipants.has(slot.participantId),
       }));
     }),
 

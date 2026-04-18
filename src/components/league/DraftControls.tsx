@@ -12,6 +12,7 @@ interface DraftControlsProps {
 
 export function DraftControls({ leagueId }: DraftControlsProps) {
   const [expandedGameId, setExpandedGameId] = useState<string | null>(null);
+  const [autoExpanded, setAutoExpanded] = useState(false);
   const utils = api.useUtils();
 
   const { data: leaderboardData, isLoading } =
@@ -55,6 +56,15 @@ export function DraftControls({ leagueId }: DraftControlsProps) {
   }
 
   const nextGameNumber = leaderboardData.games.length + 1;
+
+  // Auto-expand the latest game on first render
+  if (!autoExpanded && leaderboardData.games.length > 0) {
+    const lastGame = leaderboardData.games[leaderboardData.games.length - 1];
+    if (lastGame && !expandedGameId) {
+      setExpandedGameId(lastGame.id);
+    }
+    setAutoExpanded(true);
+  }
 
   return (
     <div className="space-y-2">
@@ -112,16 +122,12 @@ export function DraftControls({ leagueId }: DraftControlsProps) {
               leagueId={leagueId}
               gameId={game.id}
               gameStatus={game.status}
-              onGenerateOrder={() =>
-                generateOrder.mutate({ leagueId, nbaGameId: game.nbaGameId })
-              }
               onOpenDraft={() =>
                 openDraft.mutate({ leagueId, gameId: game.id })
               }
               onCloseDraft={() =>
                 closeDraft.mutate({ leagueId, gameId: game.id })
               }
-              isGenerating={generateOrder.isPending}
               isOpening={openDraft.isPending}
               isClosing={closeDraft.isPending}
             />
@@ -153,24 +159,25 @@ function GameControls({
   leagueId,
   gameId,
   gameStatus,
-  onGenerateOrder,
   onOpenDraft,
   onCloseDraft,
-  isGenerating,
   isOpening,
   isClosing,
 }: {
   leagueId: string;
   gameId: string;
   gameStatus: string;
-  onGenerateOrder: () => void;
   onOpenDraft: () => void;
   onCloseDraft: () => void;
-  isGenerating: boolean;
   isOpening: boolean;
   isClosing: boolean;
 }) {
   const { data: draftStatus, isLoading } = api.draft.getDraftStatus.useQuery({
+    leagueId,
+    gameId,
+  });
+
+  const { data: draftOrder } = api.draft.getDraftOrder.useQuery({
     leagueId,
     gameId,
   });
@@ -181,17 +188,11 @@ function GameControls({
         <div className="h-20 animate-pulse rounded bg-zinc-800" />
       ) : draftStatus ? (
         <>
-          <div className="grid grid-cols-2 gap-2 text-xs text-zinc-400">
-            <div>
-              <span className="text-zinc-600">Status: </span>
-              {draftStatus.status}
-            </div>
-            <div>
-              <span className="text-zinc-600">Slots: </span>
-              {draftStatus.slots.length}
-            </div>
+          <div className="text-xs text-zinc-400">
+            <span className="text-zinc-600">Status: </span>
+            {draftStatus.status}
             {draftStatus.activeSlot && (
-              <div className="col-span-2">
+              <span className="ml-3">
                 <span className="text-zinc-600">On clock: </span>
                 Pick #{draftStatus.activeSlot.pickPosition}
                 {draftStatus.activeSlot.clockExpiresAt && (
@@ -199,36 +200,51 @@ function GameControls({
                     {" "}(expires {new Date(draftStatus.activeSlot.clockExpiresAt).toLocaleTimeString()})
                   </span>
                 )}
-              </div>
-            )}
-            {draftStatus.draftOpensAt && (
-              <div>
-                <span className="text-zinc-600">Opens: </span>
-                {new Date(draftStatus.draftOpensAt).toLocaleTimeString()}
-              </div>
+              </span>
             )}
           </div>
 
+          {/* Draft order */}
+          {draftOrder && draftOrder.length > 0 && (
+            <div>
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
+                Pick Order
+              </p>
+              <ol className="space-y-0.5">
+                {draftOrder.map((slot) => (
+                  <li
+                    key={slot.id}
+                    className={cn(
+                      "flex items-center gap-2 rounded px-2 py-1 text-xs",
+                      draftStatus.activeSlot?.id === slot.id
+                        ? "bg-orange-500/20 text-orange-400"
+                        : "text-zinc-400",
+                    )}
+                  >
+                    <span className="w-5 text-right font-mono text-zinc-600">
+                      {slot.pickPosition}.
+                    </span>
+                    <span>{slot.participantName ?? slot.participantEmail ?? "Unknown"}</span>
+                    {slot.picked && (
+                      <span className="ml-auto text-[10px] text-zinc-600">picked</span>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-2">
             {gameStatus === "pending" && (
-              <>
-                <ActionButton
-                  onClick={onGenerateOrder}
-                  disabled={isGenerating}
-                  variant="secondary"
-                >
-                  {isGenerating ? "Generating..." : "Generate Draft Order"}
-                </ActionButton>
-                <ActionButton
-                  onClick={onOpenDraft}
-                  disabled={isOpening}
-                  variant="primary"
-                >
-                  {isOpening ? "Opening..." : "Open Draft"}
-                </ActionButton>
-              </>
+              <ActionButton
+                onClick={onOpenDraft}
+                disabled={isOpening}
+                variant="primary"
+              >
+                {isOpening ? "Opening..." : "Open Draft Window"}
+              </ActionButton>
             )}
-            {gameStatus === "drafting" && (
+            {(gameStatus === "draft-open" || gameStatus === "drafting") && (
               <ActionButton
                 onClick={onCloseDraft}
                 disabled={isClosing}
