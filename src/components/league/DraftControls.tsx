@@ -235,13 +235,13 @@ function GameControls({
           )}
 
           <div className="flex flex-wrap gap-2">
-            {gameStatus === "pending" && (
+            {(gameStatus === "pending" || gameStatus === "active") && (
               <ActionButton
                 onClick={onOpenDraft}
                 disabled={isOpening}
                 variant="primary"
               >
-                {isOpening ? "Opening..." : "Open Draft Window"}
+                {isOpening ? "Opening..." : gameStatus === "active" ? "Reopen Draft Window" : "Open Draft Window"}
               </ActionButton>
             )}
             {(gameStatus === "draft-open" || gameStatus === "drafting") && (

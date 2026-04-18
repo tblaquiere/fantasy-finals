@@ -134,16 +134,20 @@ export async function openDraftWindow(
     where: { id: gameId },
     include: {
       league: { select: { id: true, clockDurationMinutes: true } },
-      draftSlots: { orderBy: { pickPosition: "asc" } },
+      draftSlots: {
+        orderBy: { pickPosition: "asc" },
+        include: { pick: { select: { id: true } } },
+      },
     },
   });
 
-  if (game.status !== "pending") {
+  if (game.status !== "pending" && game.status !== "active") {
     throw new Error(`Cannot open draft: game status is ${game.status}`);
   }
 
-  const firstSlot = game.draftSlots[0];
-  if (!firstSlot) {
+  // Find the first slot that doesn't have a pick yet
+  const nextSlot = game.draftSlots.find((s) => !s.pick) ?? game.draftSlots[0];
+  if (!nextSlot) {
     throw new Error("No draft slots found for this game");
   }
 
@@ -158,18 +162,18 @@ export async function openDraftWindow(
       data: { status: "draft-open" },
     }),
     db.draftSlot.update({
-      where: { id: firstSlot.id },
+      where: { id: nextSlot.id },
       data: { clockStartsAt: now, clockExpiresAt },
     }),
   ]);
 
   await enqueueJob(
     "clock.expire",
-    { slotId: firstSlot.id, leagueId: game.league.id, gameId },
+    { slotId: nextSlot.id, leagueId: game.league.id, gameId },
     { startAfter: clockExpiresAt },
   );
 
-  return firstSlot;
+  return nextSlot;
 }
 
 export type DraftStatusResult = {
