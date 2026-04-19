@@ -91,6 +91,47 @@ export async function handleScoresPoll(
     return;
   }
 
+  // Ensure NbaSeries + NbaGame records exist (FK required by BoxScore)
+  const stub = SERIES_STUBS.find((s) => s.id === game.league.seriesId);
+  if (stub) {
+    const series = await db.nbaSeries.upsert({
+      where: { seriesId: stub.id },
+      update: {},
+      create: {
+        seriesId: stub.id,
+        homeTeamId: stub.homeTeamId,
+        awayTeamId: stub.awayTeamId,
+        homeTeamName: stub.homeTeamName,
+        awayTeamName: stub.awayTeamName,
+        homeTricode: stub.homeTricode,
+        awayTricode: stub.awayTricode,
+        seasonYear: stub.seasonYear,
+        round: stub.round,
+      },
+    });
+
+    await db.nbaGame.upsert({
+      where: { nbaGameId },
+      update: {
+        status: boxScore.gameStatus === 3 ? "final" : "live",
+        period: boxScore.period,
+        gameClock: boxScore.gameClock,
+        homeTeamScore: boxScore.homeTeam.score,
+        awayTeamScore: boxScore.awayTeam.score,
+      },
+      create: {
+        nbaGameId,
+        seriesDbId: series.id,
+        gameDate: new Date(),
+        status: boxScore.gameStatus === 3 ? "final" : "live",
+        period: boxScore.period,
+        gameClock: boxScore.gameClock,
+        homeTeamScore: boxScore.homeTeam.score,
+        awayTeamScore: boxScore.awayTeam.score,
+      },
+    });
+  }
+
   const allPlayers = [
     ...boxScore.homeTeam.players,
     ...boxScore.awayTeam.players,
