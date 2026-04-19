@@ -18,7 +18,7 @@ import { db } from "~/server/db";
 import { enqueueJob } from "~/server/services/job-queue";
 import { nbaStatsService } from "~/server/services/nba-stats";
 import { calculateFantasyPoints } from "~/server/services/scoring";
-import { LIVE_SCORE_POLL_INTERVAL_MS } from "~/lib/constants";
+import { LIVE_SCORE_POLL_INTERVAL_MS, SERIES_STUBS } from "~/lib/constants";
 
 export type ScoresPollPayload = {
   leagueId: string;
@@ -40,6 +40,7 @@ export async function handleScoresPoll(
   const game = await db.game.findUnique({
     where: { id: gameId },
     include: {
+      league: { select: { seriesId: true } },
       picks: {
         where: { confirmed: true },
         select: { id: true, nbaPlayerId: true, participantId: true },
@@ -60,10 +61,32 @@ export async function handleScoresPoll(
     return;
   }
 
+  // Auto-resolve NBA game ID if it's a placeholder
+  let nbaGameId = game.nbaGameId;
+  if (nbaGameId.startsWith("game")) {
+    const resolved = await resolveNbaGameId(game.league.seriesId);
+    if (resolved) {
+      nbaGameId = resolved;
+      await db.game.update({
+        where: { id: gameId },
+        data: { nbaGameId: resolved },
+      });
+      console.log(
+        `[worker] scores.poll: resolved NBA game ID ${resolved} for game ${gameId}`,
+      );
+    } else {
+      console.warn(
+        `[worker] scores.poll: could not resolve NBA game ID for series ${game.league.seriesId}`,
+      );
+      scheduleNext(leagueId, gameId);
+      return;
+    }
+  }
+
   // Fetch live box score
-  const boxScore = await nbaStatsService.getLiveBoxScore(game.nbaGameId);
+  const boxScore = await nbaStatsService.getLiveBoxScore(nbaGameId);
   if (!boxScore) {
-    console.warn(`[worker] scores.poll: could not fetch box score for ${game.nbaGameId}`);
+    console.warn(`[worker] scores.poll: could not fetch box score for ${nbaGameId}`);
     scheduleNext(leagueId, gameId);
     return;
   }
@@ -86,7 +109,7 @@ export async function handleScoresPoll(
     await db.boxScore.upsert({
       where: {
         nbaGameId_nbaPlayerId: {
-          nbaGameId: game.nbaGameId,
+          nbaGameId: nbaGameId,
           nbaPlayerId: player.personId,
         },
       },
@@ -102,7 +125,7 @@ export async function handleScoresPoll(
         isFinal: boxScore.gameStatus === 3,
       },
       create: {
-        nbaGameId: game.nbaGameId,
+        nbaGameId: nbaGameId,
         nbaPlayerId: player.personId,
         minutes: player.minutes,
         points: player.points,
@@ -142,7 +165,7 @@ export async function handleScoresPoll(
 
   // Check if game is final (Story 4.2)
   if (boxScore.gameStatus === 3) {
-    console.log(`[worker] scores.poll: game ${game.nbaGameId} is FINAL`);
+    console.log(`[worker] scores.poll: game ${nbaGameId} is FINAL`);
 
     await db.game.update({
       where: { id: gameId },
@@ -188,4 +211,23 @@ function scheduleNext(leagueId: string, gameId: string) {
   ).catch((err) =>
     console.error("[worker] scores.poll: reschedule error:", err),
   );
+}
+
+/**
+ * Try to find today's NBA game matching the league's series teams.
+ * Returns the real NBA gameId (e.g. "0042500101") or null.
+ */
+async function resolveNbaGameId(seriesId: string): Promise<string | null> {
+  const stub = SERIES_STUBS.find((s) => s.id === seriesId);
+  if (!stub) return null;
+
+  const scoreboard = await nbaStatsService.getTodaysScoreboard();
+  if (!scoreboard) return null;
+
+  const teamIds = new Set<number>([stub.homeTeamId, stub.awayTeamId]);
+  const match = scoreboard.games.find(
+    (g) => teamIds.has(g.homeTeam.teamId) && teamIds.has(g.awayTeam.teamId),
+  );
+
+  return match?.gameId ?? null;
 }
