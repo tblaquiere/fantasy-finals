@@ -172,6 +172,7 @@ function GameControls({
   isOpening: boolean;
   isClosing: boolean;
 }) {
+  const [nbaGameIdInput, setNbaGameIdInput] = useState("");
   const utils = api.useUtils();
 
   const { data: draftStatus, isLoading } = api.draft.getDraftStatus.useQuery({
@@ -184,10 +185,22 @@ function GameControls({
     gameId,
   });
 
-  const startPolling = api.draft.startScorePolling.useMutation({
+  const setNbaGameId = api.draft.setNbaGameId.useMutation({
     onSuccess: () => {
-      toast.success("Score polling started");
+      toast.success("NBA Game ID updated");
+      setNbaGameIdInput("");
       void utils.standing.getLeaderboard.invalidate();
+    },
+    onError: (err: { message: string }) => toast.error(err.message),
+  });
+
+  const pullScores = api.draft.pullScores.useMutation({
+    onSuccess: (data) => {
+      toast.success(
+        `Scores pulled: ${data.playersUpdated} players updated${data.isFinal ? " (FINAL)" : ""}`,
+      );
+      void utils.standing.getLeaderboard.invalidate();
+      void utils.draft.getDraftStatus.invalidate();
     },
     onError: (err: { message: string }) => toast.error(err.message),
   });
@@ -263,18 +276,46 @@ function GameControls({
                 {isClosing ? "Closing..." : "Close Draft"}
               </ActionButton>
             )}
-            {gameStatus === "active" && (
+            {(gameStatus === "active" || gameStatus === "final") && (
               <ActionButton
                 onClick={() =>
-                  startPolling.mutate({ leagueId, gameId })
+                  pullScores.mutate({ leagueId, gameId })
                 }
-                disabled={startPolling.isPending}
+                disabled={pullScores.isPending}
                 variant="secondary"
               >
-                {startPolling.isPending ? "Starting..." : "Start Score Polling"}
+                {pullScores.isPending ? "Pulling..." : "Pull Scores"}
               </ActionButton>
             )}
           </div>
+
+          {/* NBA Game ID override — for when auto-resolve can't find it */}
+          {(gameStatus === "active" || gameStatus === "final" || gameStatus === "pending") && (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="NBA Game ID (e.g. 0042500101)"
+                value={nbaGameIdInput}
+                onChange={(e) => setNbaGameIdInput(e.target.value)}
+                className="flex-1 rounded-lg bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 placeholder:text-zinc-600"
+              />
+              <ActionButton
+                onClick={() =>
+                  setNbaGameId.mutate({
+                    leagueId,
+                    gameId,
+                    nbaGameId: nbaGameIdInput.trim(),
+                  })
+                }
+                disabled={
+                  setNbaGameId.isPending || !nbaGameIdInput.trim()
+                }
+                variant="secondary"
+              >
+                {setNbaGameId.isPending ? "Setting..." : "Set ID"}
+              </ActionButton>
+            </div>
+          )}
         </>
       ) : (
         <p className="text-xs text-zinc-500">No draft data available</p>

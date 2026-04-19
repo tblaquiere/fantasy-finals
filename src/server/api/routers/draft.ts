@@ -219,10 +219,11 @@ export const draftRouter = createTRPCRouter({
     }),
 
   /**
-   * Manually trigger score polling for a game.
-   * Commissioner fallback if polling didn't start automatically.
+   * Pull scores directly — commissioner fallback.
+   * Resolves the NBA game ID, fetches the box score, stores stats,
+   * and updates game status. Does not depend on the worker service.
    */
-  startScorePolling: commissionerProcedure
+  pullScores: commissionerProcedure
     .input(
       z.object({
         leagueId: z.string(),
@@ -235,12 +236,134 @@ export const draftRouter = createTRPCRouter({
 
       await enforceLeagueCommissioner(ctx.db, userId, input.leagueId, isAdmin);
 
-      await enqueueJob("scores.poll", {
-        leagueId: input.leagueId,
-        gameId: input.gameId,
+      const game = await ctx.db.game.findUniqueOrThrow({
+        where: { id: input.gameId },
+        include: { league: { select: { seriesId: true } } },
       });
 
-      return { success: true };
+      // Resolve real NBA game ID if placeholder
+      let nbaGameId = game.nbaGameId;
+      if (nbaGameId.startsWith("game")) {
+        const stub = SERIES_STUBS.find(
+          (s) => s.id === game.league.seriesId,
+        );
+        if (!stub) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Series not found",
+          });
+        }
+
+        const scoreboard =
+          await nbaStatsService.getTodaysScoreboard();
+        if (!scoreboard) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Could not fetch NBA scoreboard",
+          });
+        }
+
+        const teamIds = new Set<number>([
+          stub.homeTeamId,
+          stub.awayTeamId,
+        ]);
+        const match = scoreboard.games.find(
+          (g) =>
+            teamIds.has(g.homeTeam.teamId) &&
+            teamIds.has(g.awayTeam.teamId),
+        );
+
+        if (!match) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message:
+              "No matching NBA game found on today's scoreboard for this series",
+          });
+        }
+
+        nbaGameId = match.gameId;
+        await ctx.db.game.update({
+          where: { id: input.gameId },
+          data: { nbaGameId },
+        });
+      }
+
+      // Fetch box score
+      const boxScore =
+        await nbaStatsService.getLiveBoxScore(nbaGameId);
+      if (!boxScore) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Could not fetch box score for game ${nbaGameId}`,
+        });
+      }
+
+      const allPlayers = [
+        ...boxScore.homeTeam.players,
+        ...boxScore.awayTeam.players,
+      ];
+
+      // Upsert box scores for all players
+      let upsertCount = 0;
+      for (const player of allPlayers) {
+        const fp = calculateFantasyPoints({
+          pts: player.points,
+          reb: player.reboundsTotal,
+          ast: player.assists,
+          stl: player.steals,
+          blk: player.blocks,
+        });
+
+        await ctx.db.boxScore.upsert({
+          where: {
+            nbaGameId_nbaPlayerId: {
+              nbaGameId,
+              nbaPlayerId: player.personId,
+            },
+          },
+          update: {
+            minutes: player.minutes,
+            points: player.points,
+            rebounds: player.reboundsTotal,
+            assists: player.assists,
+            steals: player.steals,
+            blocks: player.blocks,
+            fantasyPoints: fp,
+            period: boxScore.period,
+            isFinal: boxScore.gameStatus === 3,
+          },
+          create: {
+            nbaGameId,
+            nbaPlayerId: player.personId,
+            minutes: player.minutes,
+            points: player.points,
+            rebounds: player.reboundsTotal,
+            assists: player.assists,
+            steals: player.steals,
+            blocks: player.blocks,
+            fantasyPoints: fp,
+            period: boxScore.period,
+            isFinal: boxScore.gameStatus === 3,
+          },
+        });
+        upsertCount++;
+      }
+
+      // Transition to final if game is over
+      if (boxScore.gameStatus === 3 && game.status !== "final") {
+        await ctx.db.game.update({
+          where: { id: input.gameId },
+          data: { status: "final" },
+        });
+      }
+
+      return {
+        success: true,
+        nbaGameId,
+        playersUpdated: upsertCount,
+        gameStatus: boxScore.gameStatus,
+        isFinal: boxScore.gameStatus === 3,
+      };
     }),
 
   /**
