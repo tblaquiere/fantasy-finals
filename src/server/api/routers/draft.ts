@@ -193,6 +193,57 @@ export const draftRouter = createTRPCRouter({
     }),
 
   /**
+   * Manually set the real NBA game ID for a game.
+   * Commissioner fallback when auto-resolve fails.
+   */
+  setNbaGameId: commissionerProcedure
+    .input(
+      z.object({
+        leagueId: z.string(),
+        gameId: z.string(),
+        nbaGameId: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const isAdmin = ctx.session.user.role === "admin";
+
+      await enforceLeagueCommissioner(ctx.db, userId, input.leagueId, isAdmin);
+
+      await ctx.db.game.update({
+        where: { id: input.gameId },
+        data: { nbaGameId: input.nbaGameId },
+      });
+
+      return { success: true };
+    }),
+
+  /**
+   * Manually trigger score polling for a game.
+   * Commissioner fallback if polling didn't start automatically.
+   */
+  startScorePolling: commissionerProcedure
+    .input(
+      z.object({
+        leagueId: z.string(),
+        gameId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const isAdmin = ctx.session.user.role === "admin";
+
+      await enforceLeagueCommissioner(ctx.db, userId, input.leagueId, isAdmin);
+
+      await enqueueJob("scores.poll", {
+        leagueId: input.leagueId,
+        gameId: input.gameId,
+      });
+
+      return { success: true };
+    }),
+
+  /**
    * Get the draft feed for a game — Story 3.7.
    *
    * Returns all confirmed picks with participant name, player info, pick

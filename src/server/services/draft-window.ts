@@ -7,6 +7,9 @@
 
 import type { PrismaClient } from "generated/prisma";
 import { enqueueJob } from "~/server/services/job-queue";
+import { nbaStatsService } from "~/server/services/nba-stats";
+import { SERIES_STUBS } from "~/lib/constants";
+import { LIVE_SCORE_POLL_INTERVAL_MS } from "~/lib/constants";
 
 /**
  * Advance the selection clock after a pick is submitted.
@@ -106,10 +109,29 @@ export async function closeDraftWindow(
   db: PrismaClient,
   gameId: string,
 ) {
+  const game = await db.game.findUniqueOrThrow({
+    where: { id: gameId },
+    include: { league: { select: { id: true, seriesId: true } } },
+  });
+
+  // Try to resolve a real NBA game ID if the current one is a placeholder
+  let nbaGameId = game.nbaGameId;
+  if (nbaGameId.startsWith("game")) {
+    const resolved = await resolveNbaGameId(game.league.seriesId);
+    if (resolved) {
+      nbaGameId = resolved;
+    } else {
+      console.warn(
+        `[draft-window] Could not resolve real NBA game ID for series ${game.league.seriesId}. ` +
+        `Score polling will not work until nbaGameId is set correctly.`,
+      );
+    }
+  }
+
   await db.$transaction([
     db.game.update({
       where: { id: gameId },
-      data: { status: "active" },
+      data: { status: "active", nbaGameId },
     }),
     // Clear all running clocks
     db.draftSlot.updateMany({
@@ -120,6 +142,42 @@ export async function closeDraftWindow(
       data: { clockStartsAt: null, clockExpiresAt: null },
     }),
   ]);
+
+  // Bootstrap score polling
+  await enqueueJob(
+    "scores.poll",
+    { leagueId: game.league.id, gameId },
+    { startAfter: new Date(Date.now() + LIVE_SCORE_POLL_INTERVAL_MS) },
+  );
+}
+
+/**
+ * Try to find today's NBA game matching the league's series teams.
+ * Returns the real NBA gameId (e.g. "0042500101") or null if not found.
+ */
+async function resolveNbaGameId(
+  seriesId: string,
+): Promise<string | null> {
+  const stub = SERIES_STUBS.find((s) => s.id === seriesId);
+  if (!stub) return null;
+
+  const scoreboard = await nbaStatsService.getTodaysScoreboard();
+  if (!scoreboard) return null;
+
+  // Match by team IDs — either team could be home/away
+  const teamIds = new Set<number>([stub.homeTeamId, stub.awayTeamId]);
+  const match = scoreboard.games.find(
+    (g) => teamIds.has(g.homeTeam.teamId) && teamIds.has(g.awayTeam.teamId),
+  );
+
+  if (match) {
+    console.log(
+      `[draft-window] Resolved NBA game ID: ${match.gameId} for series ${seriesId}`,
+    );
+    return match.gameId;
+  }
+
+  return null;
 }
 
 /**

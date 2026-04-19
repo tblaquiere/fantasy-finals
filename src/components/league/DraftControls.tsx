@@ -172,6 +172,8 @@ function GameControls({
   isOpening: boolean;
   isClosing: boolean;
 }) {
+  const utils = api.useUtils();
+
   const { data: draftStatus, isLoading } = api.draft.getDraftStatus.useQuery({
     leagueId,
     gameId,
@@ -180,6 +182,14 @@ function GameControls({
   const { data: draftOrder } = api.draft.getDraftOrder.useQuery({
     leagueId,
     gameId,
+  });
+
+  const startPolling = api.draft.startScorePolling.useMutation({
+    onSuccess: () => {
+      toast.success("Score polling started");
+      void utils.standing.getLeaderboard.invalidate();
+    },
+    onError: (err: { message: string }) => toast.error(err.message),
   });
 
   return (
@@ -251,6 +261,17 @@ function GameControls({
                 variant="danger"
               >
                 {isClosing ? "Closing..." : "Close Draft"}
+              </ActionButton>
+            )}
+            {gameStatus === "active" && (
+              <ActionButton
+                onClick={() =>
+                  startPolling.mutate({ leagueId, gameId })
+                }
+                disabled={startPolling.isPending}
+                variant="secondary"
+              >
+                {startPolling.isPending ? "Starting..." : "Start Score Polling"}
               </ActionButton>
             )}
           </div>
