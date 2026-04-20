@@ -205,6 +205,20 @@ function GameControls({
     onError: (err: { message: string }) => toast.error(err.message),
   });
 
+  const confirmAll = api.draft.confirmAllPicks.useMutation({
+    onSuccess: (data) => {
+      toast.success(
+        data.confirmedCount > 0
+          ? `${data.confirmedCount} pick(s) confirmed`
+          : "All picks already confirmed",
+      );
+      void utils.standing.getLeaderboard.invalidate();
+      void utils.draft.getDraftStatus.invalidate();
+      void utils.draft.getDraftOrder.invalidate();
+    },
+    onError: (err: { message: string }) => toast.error(err.message),
+  });
+
   const regenerateOrder = api.draft.regenerateDraftOrder.useMutation({
     onSuccess: () => {
       toast.success("Draft order regenerated with correct standings");
@@ -297,6 +311,15 @@ function GameControls({
                 {isClosing ? "Closing..." : "Close Draft"}
               </ActionButton>
             )}
+            <ActionButton
+              onClick={() =>
+                confirmAll.mutate({ leagueId, gameId })
+              }
+              disabled={confirmAll.isPending}
+              variant="secondary"
+            >
+              {confirmAll.isPending ? "Confirming..." : "Confirm All Picks"}
+            </ActionButton>
             {(gameStatus === "active" || gameStatus === "final") && (
               <ActionButton
                 onClick={() =>

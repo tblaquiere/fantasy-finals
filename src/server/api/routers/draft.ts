@@ -694,6 +694,35 @@ export const draftRouter = createTRPCRouter({
     }),
 
   /**
+   * Force-confirm all unconfirmed picks for a game. Commissioner-only.
+   * Fixes picks that were submitted before the auto-confirm fix deployed.
+   */
+  confirmAllPicks: commissionerProcedure
+    .input(
+      z.object({
+        leagueId: z.string(),
+        gameId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const isAdmin = ctx.session.user.role === "admin";
+
+      await enforceLeagueCommissioner(ctx.db, userId, input.leagueId, isAdmin);
+
+      const result = await ctx.db.pick.updateMany({
+        where: {
+          gameId: input.gameId,
+          leagueId: input.leagueId,
+          confirmed: false,
+        },
+        data: { confirmed: true },
+      });
+
+      return { confirmedCount: result.count };
+    }),
+
+  /**
    * Override a participant's pick — Story 3.10.
    *
    * Commissioner-only. Replaces the picked player on an existing confirmed pick.
