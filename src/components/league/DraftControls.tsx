@@ -268,7 +268,7 @@ function GameControls({
           )}
 
           <div className="flex flex-wrap gap-2">
-            {gameStatus === "pending" && (
+            {(gameStatus === "pending" || gameStatus === "draft-open") && (
               <ActionButton
                 onClick={() =>
                   regenerateOrder.mutate({ leagueId, gameId })
