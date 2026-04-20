@@ -606,7 +606,7 @@ export const draftRouter = createTRPCRouter({
             gameId: input.gameId,
             leagueId: input.leagueId,
             method: "manual",
-            confirmed: false,
+            confirmed: true,
           },
         });
         return created;
@@ -647,13 +647,6 @@ export const draftRouter = createTRPCRouter({
       if (pick.participant.userId !== userId) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Not your pick" });
       }
-      if (pick.confirmed) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Pick already confirmed — cannot undo",
-        });
-      }
-
       // Check 5-second window
       const elapsed = Date.now() - pick.createdAt.getTime();
       if (elapsed > UNDO_WINDOW_MS) {
