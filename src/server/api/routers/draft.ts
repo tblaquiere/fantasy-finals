@@ -759,6 +759,49 @@ export const draftRouter = createTRPCRouter({
     }),
 
   /**
+   * Diagnostic: show all picks for a game regardless of confirmed status.
+   * Commissioner-only. Helps debug missing picks.
+   */
+  debugGamePicks: commissionerProcedure
+    .input(
+      z.object({
+        leagueId: z.string(),
+        gameId: z.string(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const isAdmin = ctx.session.user.role === "admin";
+      await enforceLeagueCommissioner(ctx.db, userId, input.leagueId, isAdmin);
+
+      const picks = await ctx.db.pick.findMany({
+        where: { gameId: input.gameId },
+        include: {
+          participant: {
+            include: { user: { select: { name: true, email: true } } },
+          },
+          nbaPlayer: {
+            select: { firstName: true, familyName: true, teamTricode: true },
+          },
+          draftSlot: { select: { id: true, pickPosition: true } },
+        },
+        orderBy: { createdAt: "asc" },
+      });
+
+      return picks.map((p) => ({
+        pickId: p.id,
+        participantName: p.participant.user.name ?? p.participant.user.email,
+        player: `${p.nbaPlayer.firstName} ${p.nbaPlayer.familyName} ${p.nbaPlayer.teamTricode}`,
+        method: p.method,
+        confirmed: p.confirmed,
+        voidedByMozgov: p.voidedByMozgov,
+        draftSlotId: p.draftSlotId,
+        draftSlotPosition: p.draftSlot?.pickPosition ?? null,
+        createdAt: p.createdAt,
+      }));
+    }),
+
+  /**
    * Override a participant's pick — Story 3.10.
    *
    * Commissioner-only. Replaces the picked player on an existing confirmed pick.
