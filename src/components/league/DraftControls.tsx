@@ -205,6 +205,16 @@ function GameControls({
     onError: (err: { message: string }) => toast.error(err.message),
   });
 
+  const regenerateOrder = api.draft.regenerateDraftOrder.useMutation({
+    onSuccess: () => {
+      toast.success("Draft order regenerated with correct standings");
+      void utils.standing.getLeaderboard.invalidate();
+      void utils.draft.getDraftStatus.invalidate();
+      void utils.draft.getDraftOrder.invalidate();
+    },
+    onError: (err: { message: string }) => toast.error(err.message),
+  });
+
   return (
     <div className="mt-1 rounded-xl bg-zinc-900/50 p-4 space-y-3">
       {isLoading ? (
@@ -258,6 +268,17 @@ function GameControls({
           )}
 
           <div className="flex flex-wrap gap-2">
+            {gameStatus === "pending" && (
+              <ActionButton
+                onClick={() =>
+                  regenerateOrder.mutate({ leagueId, gameId })
+                }
+                disabled={regenerateOrder.isPending}
+                variant="danger"
+              >
+                {regenerateOrder.isPending ? "Regenerating..." : "Regenerate Draft Order"}
+              </ActionButton>
+            )}
             {(gameStatus === "pending" || gameStatus === "active") && (
               <ActionButton
                 onClick={onOpenDraft}

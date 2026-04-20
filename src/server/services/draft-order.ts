@@ -97,19 +97,62 @@ export async function generateAndPersistDraftOrder(
     // Build standings for Game 2+
     let standings: ParticipantStanding[] | undefined;
     if (gameNumber > 1) {
-      const priorGame = await tx.game.findFirst({
+      // Get all prior games and their draft slots
+      const priorGames = await tx.game.findMany({
         where: { leagueId },
         orderBy: { gameNumber: "desc" },
         include: { draftSlots: true },
       });
 
+      // Get the most recent game for tie-break pick position
+      const mostRecentGame = priorGames[0];
+
+      // Calculate cumulative fantasy points from all prior confirmed picks
+      const allPriorPicks = await tx.pick.findMany({
+        where: {
+          leagueId,
+          confirmed: true,
+          gameId: { in: priorGames.map((g) => g.id) },
+        },
+        include: {
+          game: { select: { nbaGameId: true } },
+        },
+      });
+
+      // Look up box scores for each pick's player in their game
+      const boxScores = await tx.boxScore.findMany({
+        where: {
+          OR: allPriorPicks.map((pick) => ({
+            nbaGameId: pick.game.nbaGameId,
+            nbaPlayerId: pick.nbaPlayerId,
+          })),
+        },
+      });
+
+      // Map: "nbaGameId:nbaPlayerId" → fantasyPoints
+      const bsMap = new Map(
+        boxScores.map((bs) => [
+          `${bs.nbaGameId}:${bs.nbaPlayerId}`,
+          bs.correctedFantasyPoints ?? bs.fantasyPoints,
+        ]),
+      );
+
       standings = participants.map((p) => {
-        const slot = priorGame?.draftSlots.find(
+        // Sum fantasy points across all prior games
+        const myPicks = allPriorPicks.filter(
+          (pick) => pick.participantId === p.id,
+        );
+        const cumulativeFantasyPoints = myPicks.reduce((sum, pick) => {
+          const key = `${pick.game.nbaGameId}:${pick.nbaPlayerId}`;
+          return sum + (bsMap.get(key) ?? 0);
+        }, 0);
+
+        const slot = mostRecentGame?.draftSlots.find(
           (ds) => ds.participantId === p.id,
         );
         return {
           participantId: p.id,
-          cumulativeFantasyPoints: 0, // populated when Pick model exists (Story 3.6)
+          cumulativeFantasyPoints,
           priorGamePickPosition: slot?.pickPosition ?? null,
         };
       });

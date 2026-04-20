@@ -64,6 +64,63 @@ export const draftRouter = createTRPCRouter({
     }),
 
   /**
+   * Regenerate draft order for a game. Commissioner-only.
+   * Deletes existing draft slots (and any unconfirmed picks) and recreates.
+   * Only works if no confirmed picks exist for the game.
+   */
+  regenerateDraftOrder: commissionerProcedure
+    .input(
+      z.object({
+        leagueId: z.string(),
+        gameId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const isAdmin = ctx.session.user.role === "admin";
+
+      await enforceLeagueCommissioner(ctx.db, userId, input.leagueId, isAdmin);
+
+      const game = await ctx.db.game.findFirst({
+        where: { id: input.gameId, leagueId: input.leagueId },
+      });
+      if (!game) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Game not found" });
+      }
+
+      // Safety: don't regenerate if confirmed picks exist
+      const confirmedPicks = await ctx.db.pick.count({
+        where: { gameId: input.gameId, confirmed: true },
+      });
+      if (confirmedPicks > 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Cannot regenerate: ${confirmedPicks} confirmed pick(s) already exist`,
+        });
+      }
+
+      // Delete unconfirmed picks and existing slots, then regenerate
+      await ctx.db.$transaction(async (tx) => {
+        await tx.pick.deleteMany({
+          where: { gameId: input.gameId, confirmed: false },
+        });
+        await tx.draftSlot.deleteMany({
+          where: { gameId: input.gameId },
+        });
+        await tx.game.delete({
+          where: { id: input.gameId },
+        });
+      });
+
+      // Recreate with correct standings-based order
+      return generateAndPersistDraftOrder(
+        ctx.db,
+        input.leagueId,
+        game.nbaGameId,
+      );
+    }),
+
+  /**
    * Get the draft order for a specific game.
    * Any league participant can call this.
    */
