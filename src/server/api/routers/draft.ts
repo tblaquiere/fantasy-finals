@@ -720,7 +720,19 @@ export const draftRouter = createTRPCRouter({
         data: { confirmed: true },
       });
 
-      return { confirmedCount: result.count };
+      // Also count total picks for diagnostics
+      const totalPicks = await ctx.db.pick.count({
+        where: { gameId: input.gameId },
+      });
+      const confirmedPicks = await ctx.db.pick.count({
+        where: { gameId: input.gameId, confirmed: true },
+      });
+
+      return {
+        confirmedCount: result.count,
+        totalPicks,
+        confirmedPicks,
+      };
     }),
 
   /**

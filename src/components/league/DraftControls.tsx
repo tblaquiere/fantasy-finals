@@ -208,9 +208,7 @@ function GameControls({
   const confirmAll = api.draft.confirmAllPicks.useMutation({
     onSuccess: (data) => {
       toast.success(
-        data.confirmedCount > 0
-          ? `${data.confirmedCount} pick(s) confirmed`
-          : "All picks already confirmed",
+        `Confirmed ${data.confirmedCount} pick(s). Total: ${data.totalPicks} picks, ${data.confirmedPicks} confirmed.`,
       );
       void utils.standing.getLeaderboard.invalidate();
       void utils.draft.getDraftStatus.invalidate();
