@@ -7,9 +7,9 @@
 
 import type { PrismaClient } from "generated/prisma";
 import { enqueueJob } from "~/server/services/job-queue";
-import { nbaStatsService } from "~/server/services/nba-stats";
-import { SERIES_STUBS } from "~/lib/constants";
-import { LIVE_SCORE_POLL_INTERVAL_MS } from "~/lib/constants";
+import { nbaStatsService, type NbaPlayerStats } from "~/server/services/nba-stats";
+import { SERIES_STUBS, LIVE_SCORE_POLL_INTERVAL_MS } from "~/lib/constants";
+import { isPlayerEligibleForDraft } from "~/server/services/eligibility";
 
 /**
  * Advance the selection clock after a pick is submitted.
@@ -143,6 +143,9 @@ export async function closeDraftWindow(
     }),
   ]);
 
+  // Auto-assign picks for any slots that don't have one yet
+  await autoAssignMissingPicks(db, gameId, game.league.id, game.league.seriesId);
+
   // Bootstrap score polling
   await enqueueJob(
     "scores.poll",
@@ -178,6 +181,139 @@ async function resolveNbaGameId(
   }
 
   return null;
+}
+
+/**
+ * Auto-assign picks for any draft slots that don't have a pick yet.
+ * Uses preference list → random fallback, same as clock.expire.
+ * Called when closing the draft window or as a commissioner backfill.
+ */
+export async function autoAssignMissingPicks(
+  db: PrismaClient,
+  gameId: string,
+  leagueId: string,
+  seriesId: string,
+): Promise<number> {
+  // Get all slots with their picks
+  const slots = await db.draftSlot.findMany({
+    where: { gameId },
+    orderBy: { pickPosition: "asc" },
+    include: { pick: { select: { id: true } } },
+  });
+
+  const unpickedSlots = slots.filter((s) => !s.pick);
+  if (unpickedSlots.length === 0) return 0;
+
+  // Get the game's nbaGameId for roster lookup
+  const game = await db.game.findUniqueOrThrow({
+    where: { id: gameId },
+  });
+
+  // Try live box score first; fall back to DB roster
+  const boxScore = await nbaStatsService.getLiveBoxScore(game.nbaGameId);
+  let allPlayers: NbaPlayerStats[];
+
+  if (boxScore) {
+    allPlayers = [
+      ...boxScore.homeTeam.players,
+      ...boxScore.awayTeam.players,
+    ];
+  } else {
+    const stub = SERIES_STUBS.find((s) => s.id === seriesId);
+    if (!stub) return 0;
+
+    const rosterPlayers = await db.nbaPlayer.findMany({
+      where: { teamId: { in: [stub.homeTeamId, stub.awayTeamId] } },
+      select: { nbaPlayerId: true },
+    });
+
+    allPlayers = rosterPlayers.map((p): NbaPlayerStats => ({
+      personId: p.nbaPlayerId,
+      firstName: "",
+      familyName: "",
+      jerseyNum: "",
+      position: "",
+      teamId: 0,
+      teamTricode: "",
+      minutes: 0,
+      points: 0,
+      reboundsTotal: 0,
+      assists: 0,
+      steals: 0,
+      blocks: 0,
+      status: "ACTIVE",
+    }));
+  }
+
+  let assignedCount = 0;
+
+  for (const slot of unpickedSlots) {
+    // Get used players for this participant in the series
+    const usedPicks = await db.pick.findMany({
+      where: { participantId: slot.participantId, leagueId, confirmed: true },
+      select: { nbaPlayerId: true },
+    });
+    const usedPlayerIds = new Set(usedPicks.map((p) => p.nbaPlayerId));
+
+    // Get all confirmed picks in this game (double-draft prevention)
+    const gamePicks = await db.pick.findMany({
+      where: { gameId, confirmed: true },
+      select: { nbaPlayerId: true },
+    });
+    const pickedPlayerIds = new Set(gamePicks.map((p) => p.nbaPlayerId));
+
+    const eligiblePlayers = allPlayers.filter((p) =>
+      isPlayerEligibleForDraft(p, usedPlayerIds, pickedPlayerIds),
+    );
+
+    let selectedPlayerId: number | null = null;
+    let method = "auto-system";
+
+    // Try preference list
+    const prefItems = await db.preferenceListItem.findMany({
+      where: { participantId: slot.participantId, leagueId },
+      orderBy: { rank: "asc" },
+    });
+
+    for (const pref of prefItems) {
+      if (eligiblePlayers.some((p) => p.personId === pref.nbaPlayerId)) {
+        selectedPlayerId = pref.nbaPlayerId;
+        method = "auto-preference";
+        break;
+      }
+    }
+
+    // Fallback: random
+    if (selectedPlayerId === null && eligiblePlayers.length > 0) {
+      const randomIndex = Math.floor(Math.random() * eligiblePlayers.length);
+      selectedPlayerId = eligiblePlayers[randomIndex]!.personId;
+      method = "auto-system";
+    }
+
+    if (selectedPlayerId !== null) {
+      try {
+        await db.pick.create({
+          data: {
+            draftSlotId: slot.id,
+            nbaPlayerId: selectedPlayerId,
+            participantId: slot.participantId,
+            gameId,
+            leagueId,
+            method,
+            confirmed: true,
+          },
+        });
+        assignedCount++;
+        console.log(
+          `[draft-window] Auto-assigned player ${selectedPlayerId} (${method}) for slot ${slot.id}`,
+        );
+      } catch (err) {
+        console.error(`[draft-window] Auto-assign error for slot ${slot.id}:`, err);
+      }
+    }
+  }
+
+  return assignedCount;
 }
 
 /**

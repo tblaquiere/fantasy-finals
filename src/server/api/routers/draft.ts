@@ -23,6 +23,7 @@ import {
   getDraftStatus,
   openDraftWindow,
   closeDraftWindow,
+  autoAssignMissingPicks,
 } from "~/server/services/draft-window";
 import { nbaStatsService } from "~/server/services/nba-stats";
 import { SERIES_STUBS } from "~/lib/constants";
@@ -720,6 +721,41 @@ export const draftRouter = createTRPCRouter({
       });
 
       return { confirmedCount: result.count };
+    }),
+
+  /**
+   * Backfill missing picks for a game. Commissioner-only.
+   * Auto-assigns picks from preference lists for any slots without a pick.
+   */
+  backfillPicks: commissionerProcedure
+    .input(
+      z.object({
+        leagueId: z.string(),
+        gameId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const isAdmin = ctx.session.user.role === "admin";
+
+      await enforceLeagueCommissioner(ctx.db, userId, input.leagueId, isAdmin);
+
+      const game = await ctx.db.game.findFirst({
+        where: { id: input.gameId, leagueId: input.leagueId },
+        include: { league: { select: { seriesId: true } } },
+      });
+      if (!game) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Game not found" });
+      }
+
+      const count = await autoAssignMissingPicks(
+        ctx.db,
+        input.gameId,
+        input.leagueId,
+        game.league.seriesId,
+      );
+
+      return { assignedCount: count };
     }),
 
   /**

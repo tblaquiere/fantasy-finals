@@ -219,6 +219,20 @@ function GameControls({
     onError: (err: { message: string }) => toast.error(err.message),
   });
 
+  const backfillPicks = api.draft.backfillPicks.useMutation({
+    onSuccess: (data) => {
+      toast.success(
+        data.assignedCount > 0
+          ? `${data.assignedCount} pick(s) auto-assigned`
+          : "All slots already have picks",
+      );
+      void utils.standing.getLeaderboard.invalidate();
+      void utils.draft.getDraftStatus.invalidate();
+      void utils.draft.getDraftOrder.invalidate();
+    },
+    onError: (err: { message: string }) => toast.error(err.message),
+  });
+
   const regenerateOrder = api.draft.regenerateDraftOrder.useMutation({
     onSuccess: () => {
       toast.success("Draft order regenerated with correct standings");
@@ -319,6 +333,15 @@ function GameControls({
               variant="secondary"
             >
               {confirmAll.isPending ? "Confirming..." : "Confirm All Picks"}
+            </ActionButton>
+            <ActionButton
+              onClick={() =>
+                backfillPicks.mutate({ leagueId, gameId })
+              }
+              disabled={backfillPicks.isPending}
+              variant="secondary"
+            >
+              {backfillPicks.isPending ? "Backfilling..." : "Backfill Missing Picks"}
             </ActionButton>
             {(gameStatus === "active" || gameStatus === "final") && (
               <ActionButton
