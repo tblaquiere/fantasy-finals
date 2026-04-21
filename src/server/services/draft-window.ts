@@ -194,14 +194,21 @@ export async function autoAssignMissingPicks(
   leagueId: string,
   seriesId: string,
 ): Promise<number> {
-  // Get all slots with their picks
+  // Get all slots
   const slots = await db.draftSlot.findMany({
     where: { gameId },
     orderBy: { pickPosition: "asc" },
-    include: { pick: { select: { id: true } } },
   });
 
-  const unpickedSlots = slots.filter((s) => !s.pick);
+  // Find participants who have NO pick at all for this game (any status)
+  const allPicks = await db.pick.findMany({
+    where: { gameId },
+    select: { participantId: true },
+  });
+  const participantsWithPicks = new Set(allPicks.map((p) => p.participantId));
+  const unpickedSlots = slots.filter(
+    (s) => !participantsWithPicks.has(s.participantId),
+  );
   if (unpickedSlots.length === 0) return 0;
 
   // Get the game's nbaGameId for roster lookup
