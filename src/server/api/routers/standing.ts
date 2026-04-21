@@ -143,10 +143,8 @@ export const standingRouter = createTRPCRouter({
       // Sort by total fantasy points descending
       standings.sort((a, b) => b.totalFantasyPoints - a.totalFantasyPoints);
 
-      // Determine if any game is live
-      const hasLiveGame = games.some(
-        (g) => g.status === "active" && (gameStatusMap.get(g.id)?.period ?? 0) > 0,
-      );
+      // Determine if any game is live — poll whenever a game is active
+      const hasLiveGame = games.some((g) => g.status === "active");
 
       return {
         standings,
