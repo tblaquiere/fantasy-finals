@@ -97,65 +97,63 @@ export async function generateAndPersistDraftOrder(
     // Build standings for Game 2+
     let standings: ParticipantStanding[] | undefined;
     if (gameNumber > 1) {
-      // Get all prior games and their draft slots
-      const priorGames = await tx.game.findMany({
+      // Get the most recent prior game (draft order based on last game only)
+      const mostRecentGame = await tx.game.findFirst({
         where: { leagueId },
         orderBy: { gameNumber: "desc" },
         include: { draftSlots: true },
       });
 
-      // Get the most recent game for tie-break pick position
-      const mostRecentGame = priorGames[0];
+      if (!mostRecentGame) {
+        // No prior games — random order
+        standings = undefined;
+      } else {
+        // Get confirmed picks from the most recent game only
+        const lastGamePicks = await tx.pick.findMany({
+          where: {
+            leagueId,
+            confirmed: true,
+            gameId: mostRecentGame.id,
+          },
+          include: {
+            game: { select: { nbaGameId: true } },
+          },
+        });
 
-      // Calculate cumulative fantasy points from all prior confirmed picks
-      const allPriorPicks = await tx.pick.findMany({
-        where: {
-          leagueId,
-          confirmed: true,
-          gameId: { in: priorGames.map((g) => g.id) },
-        },
-        include: {
-          game: { select: { nbaGameId: true } },
-        },
-      });
+        // Look up box scores for each pick's player
+        const boxScores = await tx.boxScore.findMany({
+          where: {
+            nbaGameId: mostRecentGame.nbaGameId,
+            nbaPlayerId: { in: lastGamePicks.map((p) => p.nbaPlayerId) },
+          },
+        });
 
-      // Look up box scores for each pick's player in their game
-      const boxScores = await tx.boxScore.findMany({
-        where: {
-          OR: allPriorPicks.map((pick) => ({
-            nbaGameId: pick.game.nbaGameId,
-            nbaPlayerId: pick.nbaPlayerId,
-          })),
-        },
-      });
-
-      // Map: "nbaGameId:nbaPlayerId" → fantasyPoints
-      const bsMap = new Map(
-        boxScores.map((bs) => [
-          `${bs.nbaGameId}:${bs.nbaPlayerId}`,
-          bs.correctedFantasyPoints ?? bs.fantasyPoints,
-        ]),
-      );
-
-      standings = participants.map((p) => {
-        // Sum fantasy points across all prior games
-        const myPicks = allPriorPicks.filter(
-          (pick) => pick.participantId === p.id,
+        // Map: nbaPlayerId → fantasyPoints
+        const bsMap = new Map(
+          boxScores.map((bs) => [
+            bs.nbaPlayerId,
+            bs.correctedFantasyPoints ?? bs.fantasyPoints,
+          ]),
         );
-        const cumulativeFantasyPoints = myPicks.reduce((sum, pick) => {
-          const key = `${pick.game.nbaGameId}:${pick.nbaPlayerId}`;
-          return sum + (bsMap.get(key) ?? 0);
-        }, 0);
 
-        const slot = mostRecentGame?.draftSlots.find(
-          (ds) => ds.participantId === p.id,
-        );
-        return {
-          participantId: p.id,
-          cumulativeFantasyPoints,
-          priorGamePickPosition: slot?.pickPosition ?? null,
-        };
-      });
+        standings = participants.map((p) => {
+          const pick = lastGamePicks.find(
+            (pk) => pk.participantId === p.id,
+          );
+          const cumulativeFantasyPoints = pick
+            ? (bsMap.get(pick.nbaPlayerId) ?? 0)
+            : 0;
+
+          const slot = mostRecentGame.draftSlots.find(
+            (ds) => ds.participantId === p.id,
+          );
+          return {
+            participantId: p.id,
+            cumulativeFantasyPoints,
+            priorGamePickPosition: slot?.pickPosition ?? null,
+          };
+        });
+      }
     }
 
     const orderedIds = calcDraftOrder(participantIds, standings);
