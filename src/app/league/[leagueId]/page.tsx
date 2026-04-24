@@ -7,6 +7,7 @@ import { createCaller } from "~/server/api/root";
 import { db } from "~/server/db";
 import { SERIES_STUBS } from "~/lib/constants";
 import { BottomNav } from "~/components/shared/BottomNav";
+import { NextDraftOrder } from "~/components/league/NextDraftOrder";
 
 interface Props {
   params: Promise<{ leagueId: string }>;
@@ -69,6 +70,8 @@ export default async function LeagueHomePage({ params }: Props) {
             </li>
           ))}
         </ul>
+
+        <NextDraftOrder leagueId={league.id} currentUserId={session.user.id} />
 
         {/* Management links */}
         <div className="mt-6 space-y-2">
