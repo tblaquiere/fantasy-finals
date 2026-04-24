@@ -45,7 +45,9 @@ export async function advanceClock(
   });
 
   if (!nextSlot) {
-    // All picks done — no more clocks to start
+    // Story 7.1: Last pick submitted (or last clock expired). Auto-close the
+    // draft window — closeDraftWindow is idempotent on game.status.
+    await closeDraftWindow(db, gameId);
     return null;
   }
 
@@ -103,7 +105,8 @@ export async function advanceClock(
 
 /**
  * Close the draft window. Sets game status to 'active' and clears any running clocks.
- * Called when tip-off time is reached.
+ * Idempotent: returns early if the game is not in 'draft-open' state, so concurrent
+ * triggers (commissioner click, auto-close on last pick, scheduled tip-off) collapse safely.
  */
 export async function closeDraftWindow(
   db: PrismaClient,
@@ -113,6 +116,10 @@ export async function closeDraftWindow(
     where: { id: gameId },
     include: { league: { select: { id: true, seriesId: true } } },
   });
+
+  if (game.status !== "draft-open") {
+    return;
+  }
 
   // Try to resolve a real NBA game ID if the current one is a placeholder
   let nbaGameId = game.nbaGameId;
