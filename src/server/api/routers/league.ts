@@ -13,6 +13,7 @@ export const leagueRouter = createTRPCRouter({
   getAllLeagues: adminProcedure
     .query(async ({ ctx }) => {
       const leagues = await ctx.db.league.findMany({
+        where: { deletedAt: null },
         select: {
           id: true,
           name: true,
@@ -52,7 +53,7 @@ export const leagueRouter = createTRPCRouter({
     .query(async ({ ctx }) => {
       const userId = ctx.session.user.id;
       const participations = await ctx.db.participant.findMany({
-        where: { userId },
+        where: { userId, league: { deletedAt: null } },
         include: {
           league: {
             include: {
@@ -140,8 +141,8 @@ export const leagueRouter = createTRPCRouter({
         }
       }
 
-      const league = await ctx.db.league.findUnique({
-        where: { id: input.leagueId },
+      const league = await ctx.db.league.findFirst({
+        where: { id: input.leagueId, deletedAt: null },
         include: {
           participants: {
             include: { user: { select: { id: true, name: true, email: true } } },
@@ -164,8 +165,8 @@ export const leagueRouter = createTRPCRouter({
         ctx.db, ctx.session.user.id, input.leagueId, ctx.session.user.role === "admin",
       );
 
-      const league = await ctx.db.league.findUnique({
-        where: { id: input.leagueId },
+      const league = await ctx.db.league.findFirst({
+        where: { id: input.leagueId, deletedAt: null },
         select: { inviteToken: true },
       });
 
@@ -179,8 +180,8 @@ export const leagueRouter = createTRPCRouter({
   getLeagueByToken: publicProcedure
     .input(z.object({ token: z.string() }))
     .query(async ({ ctx, input }) => {
-      const league = await ctx.db.league.findUnique({
-        where: { inviteToken: input.token },
+      const league = await ctx.db.league.findFirst({
+        where: { inviteToken: input.token, deletedAt: null },
         select: {
           name: true,
           seriesId: true,
@@ -200,8 +201,8 @@ export const leagueRouter = createTRPCRouter({
   joinLeague: protectedProcedure
     .input(z.object({ token: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const league = await ctx.db.league.findUnique({
-        where: { inviteToken: input.token },
+      const league = await ctx.db.league.findFirst({
+        where: { inviteToken: input.token, deletedAt: null },
         select: { id: true },
       });
 
@@ -289,8 +290,8 @@ export const leagueRouter = createTRPCRouter({
       );
 
       // Verify league exists before updating
-      const existing = await ctx.db.league.findUnique({
-        where: { id: input.leagueId },
+      const existing = await ctx.db.league.findFirst({
+        where: { id: input.leagueId, deletedAt: null },
         select: { id: true },
       });
       if (!existing) {
@@ -304,5 +305,122 @@ export const leagueRouter = createTRPCRouter({
       });
 
       return { token: newToken };
+    }),
+
+  // ── Story 7.5: Soft-delete + restore + permanent delete ──────────────
+
+  /** Returns the caller's soft-deleted leagues where they are commissioner. */
+  getMyDeletedLeagues: protectedProcedure
+    .query(async ({ ctx }) => {
+      const userId = ctx.session.user.id;
+      const participations = await ctx.db.participant.findMany({
+        where: {
+          userId,
+          isCommissioner: true,
+          league: { deletedAt: { not: null } },
+        },
+        include: {
+          league: { select: { id: true, name: true, seriesId: true, deletedAt: true } },
+        },
+      });
+      return participations.map((p) => ({
+        leagueId: p.league.id,
+        leagueName: p.league.name,
+        seriesId: p.league.seriesId,
+        deletedAt: p.league.deletedAt!,
+      }));
+    }),
+
+  softDeleteLeague: commissionerProcedure
+    .input(z.object({ leagueId: z.string(), confirmationName: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const isAdmin = ctx.session.user.role === "admin";
+      await enforceLeagueCommissioner(ctx.db, ctx.session.user.id, input.leagueId, isAdmin);
+
+      const league = await ctx.db.league.findFirst({
+        where: { id: input.leagueId, deletedAt: null },
+        select: { id: true, name: true },
+      });
+      if (!league) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "League not found" });
+      }
+      if (input.confirmationName.trim() !== league.name) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Confirmation name does not match league name",
+        });
+      }
+
+      await ctx.db.league.update({
+        where: { id: input.leagueId },
+        data: { deletedAt: new Date() },
+      });
+      return { success: true };
+    }),
+
+  restoreLeague: commissionerProcedure
+    .input(z.object({ leagueId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const isAdmin = ctx.session.user.role === "admin";
+      await enforceLeagueCommissioner(
+        ctx.db, ctx.session.user.id, input.leagueId, isAdmin, { allowDeleted: true },
+      );
+
+      const league = await ctx.db.league.findUnique({
+        where: { id: input.leagueId },
+        select: { id: true, deletedAt: true },
+      });
+      if (!league) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "League not found" });
+      }
+      if (league.deletedAt === null) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "League is not deleted" });
+      }
+
+      await ctx.db.league.update({
+        where: { id: input.leagueId },
+        data: { deletedAt: null },
+      });
+      return { success: true };
+    }),
+
+  permanentlyDeleteLeague: commissionerProcedure
+    .input(z.object({ leagueId: z.string(), confirmationName: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const isAdmin = ctx.session.user.role === "admin";
+      await enforceLeagueCommissioner(
+        ctx.db, ctx.session.user.id, input.leagueId, isAdmin, { allowDeleted: true },
+      );
+
+      const league = await ctx.db.league.findUnique({
+        where: { id: input.leagueId },
+        select: { id: true, name: true, deletedAt: true },
+      });
+      if (!league) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "League not found" });
+      }
+      if (league.deletedAt === null) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "League must be soft-deleted before permanent deletion",
+        });
+      }
+      if (input.confirmationName.trim() !== league.name) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Confirmation name does not match league name",
+        });
+      }
+
+      // Cascade order: child records that don't auto-cascade from League FK first.
+      // Picks → MozgovWindows → DraftSlots → Games → League (Participants + PreferenceListItems cascade).
+      await ctx.db.$transaction(async (tx) => {
+        await tx.pick.deleteMany({ where: { leagueId: input.leagueId } });
+        await tx.mozgovWindow.deleteMany({ where: { leagueId: input.leagueId } });
+        await tx.draftSlot.deleteMany({ where: { game: { leagueId: input.leagueId } } });
+        await tx.game.deleteMany({ where: { leagueId: input.leagueId } });
+        await tx.league.delete({ where: { id: input.leagueId } });
+      });
+      return { success: true };
     }),
 });

@@ -6,6 +6,7 @@ import { createCaller } from "~/server/api/root";
 import { db } from "~/server/db";
 import { SERIES_STUBS } from "~/lib/constants";
 import { EmptyDashboard } from "~/components/league/EmptyDashboard";
+import { RecentlyDeletedLeagues } from "~/components/league/RecentlyDeletedLeagues";
 import { BottomNav } from "~/components/shared/BottomNav";
 import { PushPermissionPrompt } from "~/components/shared/PushPermissionPrompt";
 import { DraftFeed } from "~/components/draft/DraftFeed";
@@ -168,6 +169,8 @@ export default async function DashboardPage() {
                 })}
               </div>
             )}
+
+            <RecentlyDeletedLeagues />
           </>
         )}
 

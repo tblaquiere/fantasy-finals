@@ -394,8 +394,8 @@ export const standingRouter = createTRPCRouter({
       await enforceLeagueMember(ctx.db, userId, input.leagueId, isAdmin);
 
       // Get league to find series teams
-      const league = await ctx.db.league.findUnique({
-        where: { id: input.leagueId },
+      const league = await ctx.db.league.findFirst({
+        where: { id: input.leagueId, deletedAt: null },
         select: { seriesId: true },
       });
       if (!league) return { players: [], myPickedPlayerIds: [] };

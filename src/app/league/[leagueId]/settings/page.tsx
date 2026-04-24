@@ -6,6 +6,7 @@ import { createCaller } from "~/server/api/root";
 import { db } from "~/server/db";
 import { InviteLink } from "~/components/league/InviteLink";
 import { CommissionerControls } from "~/components/league/CommissionerControls";
+import { DeleteLeagueSection } from "~/components/league/DeleteLeagueSection";
 import { DraftControls } from "~/components/league/DraftControls";
 import { BottomNav } from "~/components/shared/BottomNav";
 
@@ -37,8 +38,10 @@ export default async function LeagueSettingsPage({ params }: Props) {
 
   // Fetch participant list for delegation UI
   let participants: { userId: string; name: string | null; email: string | null; isCommissioner: boolean }[] = [];
+  let leagueName = "";
   try {
     const leagueData = await caller.league.getLeague({ leagueId });
+    leagueName = leagueData.name;
     participants = leagueData.participants.map((p) => ({
       userId: p.user.id,
       name: p.user.name,
@@ -77,12 +80,16 @@ export default async function LeagueSettingsPage({ params }: Props) {
           <DraftControls leagueId={leagueId} />
         </div>
 
-        <div className="rounded-xl bg-zinc-900 p-4">
+        <div className="mb-4 rounded-xl bg-zinc-900 p-4">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-400">
             Transfer Commissioner
           </h2>
           <CommissionerControls leagueId={leagueId} participants={participants} />
         </div>
+
+        {leagueName && (
+          <DeleteLeagueSection leagueId={leagueId} leagueName={leagueName} />
+        )}
       </div>
       <BottomNav />
     </main>
