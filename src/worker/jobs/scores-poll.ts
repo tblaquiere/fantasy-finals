@@ -233,7 +233,11 @@ export async function handleScoresPoll(
     // Story 7.3: Auto-generate the next game's draft order (provisional). Idempotent.
     try {
       const result = await autoGenerateProvisionalNext(db, leagueId, gameId);
-      if (result.created) {
+      if (!result.resolved) {
+        console.log(
+          `[worker] scores.poll: provisional draft order skipped — ${result.reason}`,
+        );
+      } else if (result.created) {
         console.log(
           `[worker] scores.poll: auto-generated provisional draft order for game ${result.gameNumber} (gameId=${result.gameId})`,
         );

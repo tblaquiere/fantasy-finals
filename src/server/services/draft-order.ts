@@ -10,6 +10,8 @@
  */
 
 import type { PrismaClient, Prisma } from "generated/prisma";
+import { SERIES_STUBS } from "~/lib/constants";
+import { nbaStatsService } from "~/server/services/nba-stats";
 
 export interface ParticipantStanding {
   participantId: string;
@@ -184,23 +186,26 @@ export async function generateAndPersistDraftOrder(
 
 /**
  * Story 7.3: Auto-generate the next game's draft order as **provisional** immediately
- * after the prior game finalizes. Uses a placeholder nbaGameId because the next NBA
- * game ID may not be known yet — the commissioner can update it later, or the placeholder
- * can be resolved by other code paths.
+ * after the prior game finalizes. Resolves the next NBA game ID by consulting the
+ * static league schedule for the next game between the same two teams. If no future
+ * game is found (e.g. series is over), returns { resolved: false }.
  *
- * Idempotent: if a Game already exists for the next slot in this league (any nbaGameId),
- * skips generation. This preserves any commissioner-created order and avoids duplicates
- * when scores-poll fires the "final" transition more than once.
+ * Idempotent on two axes:
+ *   - If a Game already exists at the next sequential gameNumber, returns it.
+ *   - generateAndPersistDraftOrder additionally guards on the unique (league, nbaGame).
  */
 export async function autoGenerateProvisionalNext(
   db: PrismaClient,
   leagueId: string,
   justFinalizedGameId: string,
-): Promise<{ gameId: string; gameNumber: number; created: boolean }> {
+): Promise<
+  | { gameId: string; gameNumber: number; created: boolean; resolved: true }
+  | { resolved: false; reason: string }
+> {
   const existingCount = await db.game.count({ where: { leagueId } });
   const nextGameNumber = existingCount + 1;
 
-  // If a Game already exists at this sequential position, leave it alone.
+  // Already have a Game at this slot — preserve commissioner-created order.
   const existingNext = await db.game.findFirst({
     where: { leagueId, gameNumber: nextGameNumber },
   });
@@ -209,17 +214,61 @@ export async function autoGenerateProvisionalNext(
       gameId: existingNext.id,
       gameNumber: existingNext.gameNumber,
       created: false,
+      resolved: true,
     };
   }
 
-  const placeholderNbaGameId = `pending-after-${justFinalizedGameId}`;
+  // Resolve the next NBA game ID from the static league schedule.
+  const justFinalized = await db.game.findUnique({
+    where: { id: justFinalizedGameId },
+    include: { league: { select: { seriesId: true } } },
+  });
+  if (!justFinalized) {
+    return { resolved: false, reason: "just-finalized game not found" };
+  }
+  const stub = SERIES_STUBS.find((s) => s.id === justFinalized.league.seriesId);
+  if (!stub) {
+    return { resolved: false, reason: `unknown series ${justFinalized.league.seriesId}` };
+  }
+
+  // Anchor to the just-finalized NBA game's start date when known via NbaGame,
+  // otherwise the Game record's createdAt is a reasonable lower bound.
+  const nbaGame = await db.nbaGame.findUnique({
+    where: { nbaGameId: justFinalized.nbaGameId },
+    select: { gameDate: true },
+  });
+  const afterUTC = nbaGame?.gameDate ?? justFinalized.createdAt;
+
+  const next = await nbaStatsService.getNextSeriesGame(
+    stub.homeTeamId,
+    stub.awayTeamId,
+    afterUTC,
+  );
+  if (!next) {
+    return { resolved: false, reason: "no future series game on schedule" };
+  }
+
+  // Defensive: if someone (commissioner, prior auto-gen) already has a Game with
+  // this exact nbaGameId, return that instead of creating a duplicate.
+  const existingByNbaGameId = await db.game.findUnique({
+    where: { leagueId_nbaGameId: { leagueId, nbaGameId: next.nbaGameId } },
+  });
+  if (existingByNbaGameId) {
+    return {
+      gameId: existingByNbaGameId.id,
+      gameNumber: existingByNbaGameId.gameNumber,
+      created: false,
+      resolved: true,
+    };
+  }
+
   const result = await generateAndPersistDraftOrder(
     db,
     leagueId,
-    placeholderNbaGameId,
+    next.nbaGameId,
     { provisional: true },
   );
-  return { ...result, created: true };
+  return { ...result, created: true, resolved: true };
 }
 
 /**

@@ -14,6 +14,49 @@ import {
   NBA_REQUEST_TIMEOUT_MS,
 } from "~/lib/constants";
 
+// ── Static schedule (Story 7.3) ──────────────────────────────────
+
+const NBA_SCHEDULE_URL =
+  "https://cdn.nba.com/static/json/staticData/scheduleLeagueV2_1.json";
+const SCHEDULE_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+interface ScheduleEnvelope {
+  leagueSchedule: {
+    gameDates: Array<{
+      gameDate: string;
+      games: Array<{
+        gameId?: string;
+        gameDateUTC?: string;
+        homeTeam?: { teamId?: number };
+        awayTeam?: { teamId?: number };
+      }>;
+    }>;
+  };
+}
+
+let scheduleCache: { data: ScheduleEnvelope; fetchedAt: number } | null = null;
+
+async function getCachedSchedule(): Promise<ScheduleEnvelope | null> {
+  if (scheduleCache && Date.now() - scheduleCache.fetchedAt < SCHEDULE_CACHE_TTL_MS) {
+    return scheduleCache.data;
+  }
+  try {
+    const res = await rateLimitedFetch(NBA_SCHEDULE_URL);
+    if (!res.ok) {
+      console.error(
+        `[nba-stats] schedule fetch failed: ${res.status} ${res.statusText}`,
+      );
+      return null;
+    }
+    const data = (await res.json()) as ScheduleEnvelope;
+    scheduleCache = { data, fetchedAt: Date.now() };
+    return data;
+  } catch (error) {
+    console.error("[nba-stats] schedule fetch error:", error);
+    return null;
+  }
+}
+
 // ── Public Types ─────────────────────────────────────────────────
 
 export interface NbaPlayerStats {
@@ -287,6 +330,48 @@ export const nbaStatsService = {
       };
     } catch (error) {
       console.error("[nba-stats] getLiveBoxScore error:", error);
+      return null;
+    }
+  },
+
+  /**
+   * Look up the next scheduled NBA game between two teams after a given date,
+   * by querying the static NBA league schedule. Used by Story 7.3 to resolve
+   * the next series game's nbaGameId at the moment the prior game finalizes.
+   * Returns null if no such game exists or the schedule fetch fails.
+   *
+   * The schedule endpoint is large (~8MB) but static-cached by NBA. Result is
+   * memoized in-process for 1 hour to avoid repeated fetches.
+   */
+  async getNextSeriesGame(
+    homeTeamId: number,
+    awayTeamId: number,
+    afterUTC: Date,
+  ): Promise<{ nbaGameId: string; gameDateUTC: Date } | null> {
+    try {
+      const schedule = await getCachedSchedule();
+      if (!schedule) return null;
+
+      const teams = new Set<number>([homeTeamId, awayTeamId]);
+      let best: { nbaGameId: string; gameDateUTC: Date } | null = null;
+      for (const day of schedule.leagueSchedule.gameDates) {
+        for (const g of day.games) {
+          const h = g.homeTeam?.teamId;
+          const a = g.awayTeam?.teamId;
+          if (typeof h !== "number" || typeof a !== "number") continue;
+          if (!teams.has(h) || !teams.has(a)) continue;
+          if (!g.gameDateUTC || !g.gameId) continue;
+          const dt = new Date(g.gameDateUTC);
+          if (Number.isNaN(dt.getTime())) continue;
+          if (dt.getTime() <= afterUTC.getTime()) continue;
+          if (!best || dt.getTime() < best.gameDateUTC.getTime()) {
+            best = { nbaGameId: g.gameId, gameDateUTC: dt };
+          }
+        }
+      }
+      return best;
+    } catch (error) {
+      console.error("[nba-stats] getNextSeriesGame error:", error);
       return null;
     }
   },

@@ -467,7 +467,11 @@ export const draftRouter = createTRPCRouter({
             input.leagueId,
             input.gameId,
           );
-          if (result.created) {
+          if (!result.resolved) {
+            console.log(
+              `[draft.pullScores] provisional draft order skipped — ${result.reason}`,
+            );
+          } else if (result.created) {
             const participants = await ctx.db.participant.findMany({
               where: { leagueId: input.leagueId },
               select: { userId: true },
