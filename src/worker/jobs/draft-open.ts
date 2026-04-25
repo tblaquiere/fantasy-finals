@@ -59,11 +59,13 @@ export async function handleDraftOpen(
     now.getTime() + game.league.clockDurationMinutes * 60 * 1000,
   );
 
-  // Transition game status and start first clock in a transaction
+  // Transition game status and start first clock in a transaction.
+  // Story 7.4: opening the draft locks the order (draftOrderProvisional → false)
+  // so stat corrections cannot regenerate it.
   await db.$transaction([
     db.game.update({
       where: { id: gameId },
-      data: { status: "draft-open" },
+      data: { status: "draft-open", draftOrderProvisional: false },
     }),
     db.draftSlot.update({
       where: { id: firstSlot.id },

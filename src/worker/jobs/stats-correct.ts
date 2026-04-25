@@ -13,6 +13,7 @@ import { db } from "~/server/db";
 import { enqueueJob } from "~/server/services/job-queue";
 import { nbaStatsService } from "~/server/services/nba-stats";
 import { calculateFantasyPoints } from "~/server/services/scoring";
+import { regenerateProvisionalIfChanged } from "~/server/services/draft-order";
 
 export type StatsCorrectPayload = {
   gameId: string;
@@ -131,6 +132,33 @@ export async function handleStatsCorrect(
     console.log(
       `[worker] stats.correct: ${correctionCount} correction(s) applied for game ${gameId}`,
     );
+
+    // Story 7.4: stat correction may have shifted standings — regenerate the next
+    // game's provisional draft order and notify participants whose position changed.
+    // Skipped automatically if next game's draft window has opened (provisional flipped off).
+    try {
+      const result = await regenerateProvisionalIfChanged(db, leagueId);
+      if (result && result.changedParticipantIds.length > 0) {
+        const changed = await db.participant.findMany({
+          where: { id: { in: result.changedParticipantIds } },
+          select: { userId: true },
+        });
+        for (const p of changed) {
+          await enqueueJob("notification.send", {
+            userId: p.userId,
+            type: "draft-order-updated",
+            leagueId,
+            gameId: result.gameId,
+            link: `/league/${leagueId}`,
+          });
+        }
+        console.log(
+          `[worker] stats.correct: provisional draft order regenerated, ${result.changedParticipantIds.length} participant(s) notified`,
+        );
+      }
+    } catch (err) {
+      console.error("[worker] stats.correct: regenerateProvisionalIfChanged failed:", err);
+    }
   }
 
   // Reschedule for next check

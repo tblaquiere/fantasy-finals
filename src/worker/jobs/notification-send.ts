@@ -62,6 +62,14 @@ const NOTIFICATION_TEMPLATES: Record<
     title: "Mozgov — Your Turn!",
     body: "Your 3-minute replacement window is now open. Pick a replacement player!",
   }),
+  "draft-order-provisional": () => ({
+    title: "Next Draft Order Posted",
+    body: "Provisional order is up — check where you pick. May shift if NBA stat corrections land within 24 hours.",
+  }),
+  "draft-order-updated": () => ({
+    title: "Your Pick Position Changed",
+    body: "A stat correction updated the standings. Tap to see your new pick position.",
+  }),
 };
 
 export async function handleNotificationSend(

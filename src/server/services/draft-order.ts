@@ -70,6 +70,7 @@ export async function generateAndPersistDraftOrder(
   db: PrismaClient,
   leagueId: string,
   nbaGameId: string,
+  options: { provisional?: boolean } = {},
 ): Promise<{ gameId: string; gameNumber: number }> {
   const participants = await db.participant.findMany({
     where: { leagueId },
@@ -159,7 +160,12 @@ export async function generateAndPersistDraftOrder(
     const orderedIds = calcDraftOrder(participantIds, standings);
 
     const created = await tx.game.create({
-      data: { leagueId, nbaGameId, gameNumber },
+      data: {
+        leagueId,
+        nbaGameId,
+        gameNumber,
+        draftOrderProvisional: options.provisional ?? false,
+      },
     });
 
     await tx.draftSlot.createMany({
@@ -174,6 +180,144 @@ export async function generateAndPersistDraftOrder(
   });
 
   return { gameId: game.id, gameNumber: game.gameNumber };
+}
+
+/**
+ * Story 7.3: Auto-generate the next game's draft order as **provisional** immediately
+ * after the prior game finalizes. Uses a placeholder nbaGameId because the next NBA
+ * game ID may not be known yet — the commissioner can update it later, or the placeholder
+ * can be resolved by other code paths.
+ *
+ * Idempotent: if a Game already exists for the next slot in this league (any nbaGameId),
+ * skips generation. This preserves any commissioner-created order and avoids duplicates
+ * when scores-poll fires the "final" transition more than once.
+ */
+export async function autoGenerateProvisionalNext(
+  db: PrismaClient,
+  leagueId: string,
+  justFinalizedGameId: string,
+): Promise<{ gameId: string; gameNumber: number; created: boolean }> {
+  const existingCount = await db.game.count({ where: { leagueId } });
+  const nextGameNumber = existingCount + 1;
+
+  // If a Game already exists at this sequential position, leave it alone.
+  const existingNext = await db.game.findFirst({
+    where: { leagueId, gameNumber: nextGameNumber },
+  });
+  if (existingNext) {
+    return {
+      gameId: existingNext.id,
+      gameNumber: existingNext.gameNumber,
+      created: false,
+    };
+  }
+
+  const placeholderNbaGameId = `pending-after-${justFinalizedGameId}`;
+  const result = await generateAndPersistDraftOrder(
+    db,
+    leagueId,
+    placeholderNbaGameId,
+    { provisional: true },
+  );
+  return { ...result, created: true };
+}
+
+/**
+ * Story 7.4: Recompute the next game's provisional draft order after a stat correction.
+ * Returns participantIds whose pick positions changed (so the caller can dispatch
+ * notifications), or an empty array when the order is unchanged or the regeneration
+ * is not allowed (draft window already opened, slots locked, no provisional order).
+ */
+export async function regenerateProvisionalIfChanged(
+  db: PrismaClient,
+  leagueId: string,
+): Promise<{ gameId: string; changedParticipantIds: string[] } | null> {
+  const nextGame = await db.game.findFirst({
+    where: { leagueId, draftOrderProvisional: true, status: "pending" },
+    orderBy: { gameNumber: "asc" },
+    include: { draftSlots: { orderBy: { pickPosition: "asc" } } },
+  });
+
+  if (!nextGame || nextGame.draftSlots.length === 0) {
+    return null;
+  }
+
+  const participants = await db.participant.findMany({
+    where: { leagueId },
+    orderBy: { joinedAt: "asc" },
+  });
+  if (participants.length === 0) return null;
+
+  // Recompute standings using the same logic as generateAndPersistDraftOrder, but
+  // independently here so we can compare against the existing slots without writing.
+  const priorGame = await db.game.findFirst({
+    where: { leagueId, gameNumber: nextGame.gameNumber - 1 },
+    include: { draftSlots: true },
+  });
+
+  let standings: ParticipantStanding[] | undefined;
+  if (priorGame) {
+    const priorPicks = await db.pick.findMany({
+      where: { leagueId, gameId: priorGame.id, confirmed: true },
+    });
+    const boxScores = await db.boxScore.findMany({
+      where: {
+        nbaGameId: priorGame.nbaGameId,
+        nbaPlayerId: { in: priorPicks.map((p) => p.nbaPlayerId) },
+      },
+    });
+    const bsMap = new Map(
+      boxScores.map((bs) => [
+        bs.nbaPlayerId,
+        bs.correctedFantasyPoints ?? bs.fantasyPoints,
+      ]),
+    );
+    standings = participants.map((p) => {
+      const pick = priorPicks.find((pk) => pk.participantId === p.id);
+      const slot = priorGame.draftSlots.find((ds) => ds.participantId === p.id);
+      return {
+        participantId: p.id,
+        cumulativeFantasyPoints: pick ? (bsMap.get(pick.nbaPlayerId) ?? 0) : 0,
+        priorGamePickPosition: slot?.pickPosition ?? null,
+      };
+    });
+  }
+
+  const newOrder = calcDraftOrder(
+    participants.map((p) => p.id),
+    standings,
+  );
+
+  const oldPositionByPid = new Map(
+    nextGame.draftSlots.map((s) => [s.participantId, s.pickPosition]),
+  );
+
+  const changedParticipantIds: string[] = [];
+  for (let i = 0; i < newOrder.length; i++) {
+    const pid = newOrder[i]!;
+    const newPos = i + 1;
+    if (oldPositionByPid.get(pid) !== newPos) {
+      changedParticipantIds.push(pid);
+    }
+  }
+
+  if (changedParticipantIds.length === 0) {
+    return { gameId: nextGame.id, changedParticipantIds: [] };
+  }
+
+  // Apply the new order. Unique constraints make us delete-then-insert.
+  await db.$transaction(async (tx) => {
+    await tx.draftSlot.deleteMany({ where: { gameId: nextGame.id } });
+    await tx.draftSlot.createMany({
+      data: newOrder.map((participantId, idx) => ({
+        gameId: nextGame.id,
+        participantId,
+        pickPosition: idx + 1,
+      })),
+    });
+  });
+
+  return { gameId: nextGame.id, changedParticipantIds };
 }
 
 /**

@@ -138,6 +138,11 @@ model Game {
   draftOpensAt  DateTime? @map("draft_opens_at")
   draftClosesAt DateTime? @map("draft_closes_at")
 
+  // Story 7.3 / 7.4: true when draft order was auto-generated immediately after the prior
+  // game finalized. Can be regenerated on stat corrections until the draft window opens
+  // (at which point this flips to false and the order is locked).
+  draftOrderProvisional Boolean @default(false) @map("draft_order_provisional")
+
   league        League         @relation(fields: [leagueId], references: [id])
   draftSlots    DraftSlot[]
   picks         Pick[]

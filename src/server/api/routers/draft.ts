@@ -17,7 +17,10 @@ import {
   enforceLeagueCommissioner,
   enforceLeagueMember,
 } from "~/server/api/helpers";
-import { generateAndPersistDraftOrder } from "~/server/services/draft-order";
+import {
+  autoGenerateProvisionalNext,
+  generateAndPersistDraftOrder,
+} from "~/server/services/draft-order";
 import {
   advanceClock,
   getDraftStatus,
@@ -456,6 +459,32 @@ export const draftRouter = createTRPCRouter({
           where: { id: input.gameId },
           data: { status: "final" },
         });
+
+        // Story 7.3: Auto-generate the next game's draft order (provisional). Idempotent.
+        try {
+          const result = await autoGenerateProvisionalNext(
+            ctx.db,
+            input.leagueId,
+            input.gameId,
+          );
+          if (result.created) {
+            const participants = await ctx.db.participant.findMany({
+              where: { leagueId: input.leagueId },
+              select: { userId: true },
+            });
+            for (const p of participants) {
+              await enqueueJob("notification.send", {
+                userId: p.userId,
+                type: "draft-order-provisional",
+                leagueId: input.leagueId,
+                gameId: result.gameId,
+                link: `/league/${input.leagueId}`,
+              });
+            }
+          }
+        } catch (err) {
+          console.error("[draft.pullScores] autoGenerateProvisionalNext failed:", err);
+        }
       }
 
       return {

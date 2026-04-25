@@ -18,6 +18,7 @@ import { db } from "~/server/db";
 import { enqueueJob } from "~/server/services/job-queue";
 import { nbaStatsService } from "~/server/services/nba-stats";
 import { calculateFantasyPoints } from "~/server/services/scoring";
+import { autoGenerateProvisionalNext } from "~/server/services/draft-order";
 import { LIVE_SCORE_POLL_INTERVAL_MS, SERIES_STUBS } from "~/lib/constants";
 
 export type ScoresPollPayload = {
@@ -227,6 +228,27 @@ export async function handleScoresPoll(
         gameId,
         link: `/league/${leagueId}/history`,
       });
+    }
+
+    // Story 7.3: Auto-generate the next game's draft order (provisional). Idempotent.
+    try {
+      const result = await autoGenerateProvisionalNext(db, leagueId, gameId);
+      if (result.created) {
+        console.log(
+          `[worker] scores.poll: auto-generated provisional draft order for game ${result.gameNumber} (gameId=${result.gameId})`,
+        );
+        for (const p of participants) {
+          await enqueueJob("notification.send", {
+            userId: p.userId,
+            type: "draft-order-provisional",
+            leagueId,
+            gameId: result.gameId,
+            link: `/league/${leagueId}`,
+          });
+        }
+      }
+    } catch (err) {
+      console.error("[worker] scores.poll: autoGenerateProvisionalNext failed:", err);
     }
 
     // Start post-game stat correction polling (Story 6.4)

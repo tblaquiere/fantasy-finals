@@ -365,9 +365,11 @@ export async function openDraftWindow(
   );
 
   await db.$transaction([
+    // Story 7.4: opening the draft locks the order — flips draftOrderProvisional
+    // off so subsequent stat corrections cannot regenerate it.
     db.game.update({
       where: { id: gameId },
-      data: { status: "draft-open" },
+      data: { status: "draft-open", draftOrderProvisional: false },
     }),
     db.draftSlot.update({
       where: { id: nextSlot.id },

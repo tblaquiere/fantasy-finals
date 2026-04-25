@@ -14,7 +14,7 @@ export async function NextDraftOrder({ leagueId, currentUserId }: Props) {
   const nextGame = await db.game.findFirst({
     where: { leagueId, status: { in: ["pending", "draft-open"] } },
     orderBy: { gameNumber: "asc" },
-    select: { id: true, gameNumber: true, status: true },
+    select: { id: true, gameNumber: true, status: true, draftOrderProvisional: true },
   });
 
   if (!nextGame) return null;
@@ -37,7 +37,18 @@ export async function NextDraftOrder({ leagueId, currentUserId }: Props) {
     <section className="mt-6">
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-400">
         Next Draft — Game {nextGame.gameNumber}
+        {nextGame.draftOrderProvisional && (
+          <span className="ml-2 rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-medium normal-case text-amber-300">
+            Provisional
+          </span>
+        )}
       </h2>
+      {nextGame.draftOrderProvisional && (
+        <p className="mb-3 text-xs text-zinc-500">
+          Order may shift if NBA stat corrections land within 24 hours of the previous game&apos;s
+          final buzzer. You&apos;ll be notified if your pick position changes.
+        </p>
+      )}
       {myPosition && (
         <p className="mb-3 rounded-xl bg-orange-500/10 px-4 py-3 text-sm text-orange-300">
           You pick <span className="font-bold text-orange-400">#{myPosition}</span> of{" "}
