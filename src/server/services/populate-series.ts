@@ -50,11 +50,12 @@ export async function ensureSeriesPopulated(
     console.log(`[populate-series] Created NbaSeries: ${stub.name}`);
   }
 
-  // Try fetching rosters from NBA API
-  const season = stub.seasonYear; // e.g. "2025-26"
+  // Fetch rosters via the CDN box score endpoint (the stats.nba.com roster
+  // endpoint has been observed returning contaminated cross-team data from
+  // cloud IPs — see Story 7-fix-roster).
   const [homeRoster, awayRoster] = await Promise.all([
-    nbaStatsService.getTeamRoster(stub.homeTeamId, stub.homeTricode, season),
-    nbaStatsService.getTeamRoster(stub.awayTeamId, stub.awayTricode, season),
+    nbaStatsService.getTeamRosterFromCdn(stub.homeTeamId, stub.homeTricode),
+    nbaStatsService.getTeamRosterFromCdn(stub.awayTeamId, stub.awayTricode),
   ]);
 
   const allPlayers = [
@@ -77,6 +78,8 @@ export async function ensureSeriesPopulated(
     await db.nbaPlayer.upsert({
       where: { nbaPlayerId: p.personId },
       update: {
+        firstName: p.firstName,
+        familyName: p.familyName,
         teamId: p.teamId,
         teamTricode: p.teamTricode,
         position: p.position,

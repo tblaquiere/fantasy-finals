@@ -36,6 +36,30 @@ interface ScheduleEnvelope {
 
 let scheduleCache: { data: ScheduleEnvelope; fetchedAt: number } | null = null;
 
+async function getRecentCompletedGameIdForTeam(
+  teamId: number,
+  beforeUTC: Date,
+): Promise<string | null> {
+  const schedule = await getCachedSchedule();
+  if (!schedule) return null;
+  let best: { gameId: string; date: Date } | null = null;
+  for (const day of schedule.leagueSchedule.gameDates) {
+    for (const g of day.games) {
+      const h = g.homeTeam?.teamId;
+      const a = g.awayTeam?.teamId;
+      if (h !== teamId && a !== teamId) continue;
+      if (!g.gameId || !g.gameDateUTC) continue;
+      const d = new Date(g.gameDateUTC);
+      if (Number.isNaN(d.getTime())) continue;
+      if (d.getTime() >= beforeUTC.getTime()) continue;
+      if (!best || d.getTime() > best.date.getTime()) {
+        best = { gameId: g.gameId, date: d };
+      }
+    }
+  }
+  return best?.gameId ?? null;
+}
+
 async function getCachedSchedule(): Promise<ScheduleEnvelope | null> {
   if (scheduleCache && Date.now() - scheduleCache.fetchedAt < SCHEDULE_CACHE_TTL_MS) {
     return scheduleCache.data;
@@ -332,6 +356,47 @@ export const nbaStatsService = {
       console.error("[nba-stats] getLiveBoxScore error:", error);
       return null;
     }
+  },
+
+  /**
+   * Build a team roster from the most recent CDN box score involving the team.
+   * The stats.nba.com commonteamroster endpoint has been observed returning
+   * contaminated rosters from cloud IPs (mixing players across teams). The CDN
+   * box score endpoint is reliable, and the parent team's player list is the
+   * authoritative roster for that team at game time.
+   */
+  async getTeamRosterFromCdn(
+    teamId: number,
+    teamTricode: string,
+  ): Promise<NbaRosterPlayer[] | null> {
+    const recentGameId = await getRecentCompletedGameIdForTeam(teamId, new Date());
+    if (!recentGameId) {
+      console.warn(`[nba-stats] getTeamRosterFromCdn: no recent game for team ${teamId}`);
+      return null;
+    }
+    const boxScore = await this.getLiveBoxScore(recentGameId);
+    if (!boxScore) return null;
+    const matched =
+      boxScore.homeTeam.teamId === teamId
+        ? boxScore.homeTeam
+        : boxScore.awayTeam.teamId === teamId
+          ? boxScore.awayTeam
+          : null;
+    if (!matched) {
+      console.warn(`[nba-stats] getTeamRosterFromCdn: team ${teamId} not in box ${recentGameId}`);
+      return null;
+    }
+    return matched.players
+      .filter((p) => p.personId)
+      .map((p): NbaRosterPlayer => ({
+        personId: p.personId,
+        firstName: p.firstName,
+        familyName: p.familyName,
+        jersey: p.jerseyNum,
+        position: p.position,
+        teamId,
+        teamTricode,
+      }));
   },
 
   /**
