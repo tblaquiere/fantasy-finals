@@ -31,6 +31,27 @@ export const SERIES_STUBS = [
     awayTeamId: 1610612747, awayTricode: "LAL", awayTeamName: "Los Angeles Lakers",
     round: 1, seasonYear: "2025-26",
   },
+  {
+    id: "2026-er2-knicks-sixers",
+    name: "Knicks vs 76ers — East R2",
+    homeTeamId: 1610612752, homeTricode: "NYK", homeTeamName: "New York Knicks",
+    awayTeamId: 1610612755, awayTricode: "PHI", awayTeamName: "Philadelphia 76ers",
+    round: 2, seasonYear: "2025-26",
+  },
+  {
+    id: "2026-wr2-timberwolves-spurs",
+    name: "Timberwolves vs Spurs — West R2",
+    homeTeamId: 1610612759, homeTricode: "SAS", homeTeamName: "San Antonio Spurs",
+    awayTeamId: 1610612750, awayTricode: "MIN", awayTeamName: "Minnesota Timberwolves",
+    round: 2, seasonYear: "2025-26",
+  },
+  {
+    id: "2026-wr2-lakers-thunder",
+    name: "Lakers vs Thunder — West R2",
+    homeTeamId: 1610612760, homeTricode: "OKC", homeTeamName: "Oklahoma City Thunder",
+    awayTeamId: 1610612747, awayTricode: "LAL", awayTeamName: "Los Angeles Lakers",
+    round: 2, seasonYear: "2025-26",
+  },
 ] as const;
 
 export type SeriesId = (typeof SERIES_STUBS)[number]["id"];
