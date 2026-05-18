@@ -367,14 +367,16 @@ export const nbaStatsService = {
         if (!g.gameDateUTC) continue;
         const dt = new Date(g.gameDateUTC);
         if (Number.isNaN(dt.getTime())) continue;
+        const homeFull = [h.teamCity, h.teamName].filter(Boolean).join(" ");
+        const awayFull = [a.teamCity, a.teamName].filter(Boolean).join(" ");
         out.push({
           gameId: g.gameId,
           gameDateUTC: dt,
           homeTeamId: h.teamId,
-          homeTeamName: h.teamName ?? "",
+          homeTeamName: homeFull,
           homeTricode: h.teamTricode,
           awayTeamId: a.teamId,
-          awayTeamName: a.teamName ?? "",
+          awayTeamName: awayFull,
           awayTricode: a.teamTricode,
         });
       }

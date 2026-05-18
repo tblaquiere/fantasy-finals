@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { auth } from "~/server/auth";
 import { createCaller } from "~/server/api/root";
 import { db } from "~/server/db";
-import { SERIES_STUBS } from "~/lib/constants";
 import { RecalculateButton } from "~/components/admin/RecalculateButton";
 import { BottomNav } from "~/components/shared/BottomNav";
 
@@ -32,8 +31,7 @@ export default async function AdminPage() {
 
         <div className="space-y-3">
           {leagues.map((league) => {
-            const seriesName =
-              SERIES_STUBS.find((s) => s.id === league.seriesId)?.name ?? league.seriesId;
+            const seriesName = league.seriesName;
             const commLabel =
               league.commissioner?.name ?? league.commissioner?.email ?? "Unknown";
             return (

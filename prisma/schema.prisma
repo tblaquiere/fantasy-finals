@@ -89,6 +89,10 @@ model League {
   id                   String        @id @default(cuid())
   name                 String
   seriesId             String        @map("series_id")
+  // Snapshot of the series display name at the time the league was created.
+  // Avoids per-render schedule lookups and keeps display stable even if the
+  // schedule-derived naming convention changes later.
+  seriesName           String?       @map("series_name")
   clockDurationMinutes Int           @map("clock_duration_minutes")
   inviteToken          String?       @unique @map("invite_token")
   createdById          String        @map("created_by_id")

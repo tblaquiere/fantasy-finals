@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { auth } from "~/server/auth";
 import { createCaller } from "~/server/api/root";
 import { db } from "~/server/db";
-import { SERIES_STUBS } from "~/lib/constants";
 import { EmptyDashboard } from "~/components/league/EmptyDashboard";
 import { RecentlyDeletedLeagues } from "~/components/league/RecentlyDeletedLeagues";
 import { BottomNav } from "~/components/shared/BottomNav";
@@ -40,9 +39,7 @@ export default async function DashboardPage() {
     });
 
     if (game) {
-      const seriesName =
-        SERIES_STUBS.find((s) => s.id === league.seriesId)?.name ??
-        league.seriesId;
+      const seriesName = league.seriesName;
       activeGame = {
         gameId: game.id,
         gameNumber: game.gameNumber,
@@ -149,9 +146,7 @@ export default async function DashboardPage() {
                   No active drafts or games right now.
                 </p>
                 {leagues.map((league) => {
-                  const seriesName =
-                    SERIES_STUBS.find((s) => s.id === league.seriesId)?.name ??
-                    league.seriesId;
+                  const seriesName = league.seriesName;
                   return (
                     <Link
                       key={league.leagueId}

@@ -5,18 +5,14 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { api } from "~/trpc/react";
-import { SERIES_STUBS } from "~/lib/constants";
 import { Button } from "~/components/ui/button";
 
 interface DeletedLeague {
   leagueId: string;
   leagueName: string;
   seriesId: string;
+  seriesName: string;
   deletedAt: Date;
-}
-
-function seriesDisplayName(seriesId: string): string {
-  return SERIES_STUBS.find((s) => s.id === seriesId)?.name ?? seriesId;
 }
 
 function relativeTime(date: Date): string {
@@ -108,7 +104,7 @@ function DeletedLeagueRow({ league, onChange }: { league: DeletedLeague; onChang
         <div>
           <p className="text-sm font-medium text-zinc-100">{league.leagueName}</p>
           <p className="mt-0.5 text-xs text-zinc-500">
-            {seriesDisplayName(league.seriesId)} — deleted {relativeTime(league.deletedAt)}
+            {league.seriesName} — deleted {relativeTime(league.deletedAt)}
           </p>
         </div>
       </div>

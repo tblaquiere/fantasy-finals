@@ -4,7 +4,6 @@ import Link from "next/link";
 import { auth } from "~/server/auth";
 import { createCaller } from "~/server/api/root";
 import { db } from "~/server/db";
-import { SERIES_STUBS } from "~/lib/constants";
 
 interface Props {
   params: Promise<{ token: string }>;
@@ -56,14 +55,11 @@ export default async function JoinPage({ params }: Props) {
     redirect(`/league/${joinResult.leagueId}`);
   }
 
-  // Not authenticated — show league preview with sign-in CTA
-  const series = SERIES_STUBS.find((s) => s.id === league.seriesId);
-
   return (
     <main className="flex min-h-screen items-center justify-center bg-zinc-950 pb-16 text-zinc-50">
       <div className="mx-auto max-w-sm px-4 text-center">
         <h1 className="mb-2 text-2xl font-bold text-orange-500">{league.name}</h1>
-        <p className="mb-1 text-sm text-zinc-400">{series?.name ?? league.seriesId}</p>
+        <p className="mb-1 text-sm text-zinc-400">{league.seriesName}</p>
         <p className="mb-6 text-sm text-zinc-500">
           {league.participantCount} participant{league.participantCount !== 1 ? "s" : ""}
         </p>

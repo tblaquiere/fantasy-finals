@@ -5,7 +5,6 @@ import { TRPCError } from "@trpc/server";
 import { auth } from "~/server/auth";
 import { createCaller } from "~/server/api/root";
 import { db } from "~/server/db";
-import { SERIES_STUBS } from "~/lib/constants";
 import { BottomNav } from "~/components/shared/BottomNav";
 import { NextDraftOrder } from "~/components/league/NextDraftOrder";
 
@@ -34,7 +33,6 @@ export default async function LeagueHomePage({ params }: Props) {
     notFound();
   }
 
-  const series = SERIES_STUBS.find((s) => s.id === league.seriesId);
   const isCommissioner = league.participants.some(
     (p) => p.isCommissioner && p.user.id === session.user.id,
   );
@@ -46,7 +44,7 @@ export default async function LeagueHomePage({ params }: Props) {
           {league.name}
         </h1>
         <p className="mb-6 text-sm text-zinc-400">
-          {series?.name ?? league.seriesId}
+          {league.seriesName ?? league.seriesId}
         </p>
 
         {/* Participants */}

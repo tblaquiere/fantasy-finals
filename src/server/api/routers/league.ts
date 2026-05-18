@@ -18,6 +18,7 @@ export const leagueRouter = createTRPCRouter({
           id: true,
           name: true,
           seriesId: true,
+          seriesName: true,
           createdAt: true,
           participants: {
             where: { isCommissioner: true },
@@ -37,6 +38,7 @@ export const leagueRouter = createTRPCRouter({
           leagueId: league.id,
           leagueName: league.name,
           seriesId: league.seriesId,
+          seriesName: league.seriesName ?? league.seriesId,
           participantCount: league._count.participants,
           commissioner: commParticipant
             ? {
@@ -67,6 +69,7 @@ export const leagueRouter = createTRPCRouter({
         leagueId: p.leagueId,
         leagueName: p.league.name,
         seriesId: p.league.seriesId,
+        seriesName: p.league.seriesName ?? p.league.seriesId,
         participantCount: p.league._count.participants,
         isCommissioner: p.isCommissioner,
         joinedAt: p.joinedAt,
@@ -103,6 +106,7 @@ export const leagueRouter = createTRPCRouter({
           data: {
             name: input.name,
             seriesId: input.seriesId,
+            seriesName: series.name,
             clockDurationMinutes: input.clockDurationMinutes,
             inviteToken: crypto.randomUUID(),
             createdById: userId,
@@ -195,6 +199,7 @@ export const leagueRouter = createTRPCRouter({
         select: {
           name: true,
           seriesId: true,
+          seriesName: true,
           _count: { select: { participants: true } },
         },
       });
@@ -204,6 +209,7 @@ export const leagueRouter = createTRPCRouter({
       return {
         name: league.name,
         seriesId: league.seriesId,
+        seriesName: league.seriesName ?? league.seriesId,
         participantCount: league._count.participants,
       };
     }),
@@ -330,13 +336,14 @@ export const leagueRouter = createTRPCRouter({
           league: { deletedAt: { not: null } },
         },
         include: {
-          league: { select: { id: true, name: true, seriesId: true, deletedAt: true } },
+          league: { select: { id: true, name: true, seriesId: true, seriesName: true, deletedAt: true } },
         },
       });
       return participations.map((p) => ({
         leagueId: p.league.id,
         leagueName: p.league.name,
         seriesId: p.league.seriesId,
+        seriesName: p.league.seriesName ?? p.league.seriesId,
         deletedAt: p.league.deletedAt!,
       }));
     }),
