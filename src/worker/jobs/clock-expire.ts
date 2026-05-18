@@ -18,8 +18,8 @@
 import type { Job } from "pg-boss";
 
 import { db } from "~/server/db";
-import { SERIES_STUBS } from "~/lib/constants";
 import { enqueueJob } from "~/server/services/job-queue";
+import { getPlayoffSeries } from "~/server/services/playoff-series";
 import { advanceClock } from "~/server/services/draft-window";
 import { nbaStatsService, type NbaPlayerStats } from "~/server/services/nba-stats";
 import {
@@ -115,9 +115,7 @@ export async function handleClockExpire(
     ];
   } else {
     // Pre-game: use stored roster from NbaPlayer table
-    const seriesStub = SERIES_STUBS.find(
-      (s) => s.id === game.league.seriesId,
-    );
+    const seriesStub = await getPlayoffSeries(db, game.league.seriesId);
     if (!seriesStub) {
       console.error(
         `[worker] clock.expire: series stub not found for ${game.league.seriesId}`,

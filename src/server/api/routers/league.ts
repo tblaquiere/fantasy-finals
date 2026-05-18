@@ -3,10 +3,10 @@ import { z } from "zod";
 
 import { createTRPCRouter, adminProcedure, commissionerProcedure, protectedProcedure, publicProcedure } from "~/server/api/trpc";
 import { enforceLeagueCommissioner } from "~/server/api/helpers";
-import { CLOCK_DURATION_OPTIONS, SERIES_STUBS } from "~/lib/constants";
+import { CLOCK_DURATION_OPTIONS } from "~/lib/constants";
 import { ensureSeriesPopulated } from "~/server/services/populate-series";
+import { getPlayoffSeries } from "~/server/services/playoff-series";
 
-const seriesIds = SERIES_STUBS.map((s) => s.id) as [string, ...string[]];
 const validClockMinutes = new Set<number>(CLOCK_DURATION_OPTIONS);
 
 export const leagueRouter = createTRPCRouter({
@@ -77,7 +77,7 @@ export const leagueRouter = createTRPCRouter({
     .input(
       z.object({
         name: z.string().min(1).max(60),
-        seriesId: z.enum(seriesIds),
+        seriesId: z.string().min(1),
         clockDurationMinutes: z.number().int().refine(
           (v) => validClockMinutes.has(v),
           { message: `Must be one of: ${[...CLOCK_DURATION_OPTIONS].join(", ")}` },
@@ -86,6 +86,16 @@ export const leagueRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
+
+      // Validate seriesId against the schedule-derived catalog. Rejects
+      // arbitrary strings that aren't a currently-known playoff series.
+      const series = await getPlayoffSeries(ctx.db, input.seriesId);
+      if (!series) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Unknown playoff series",
+        });
+      }
 
       // Wrap all writes in a transaction for atomicity
       const league = await ctx.db.$transaction(async (tx) => {

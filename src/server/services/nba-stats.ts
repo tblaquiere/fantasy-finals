@@ -20,18 +20,38 @@ const NBA_SCHEDULE_URL =
   "https://cdn.nba.com/static/json/staticData/scheduleLeagueV2_1.json";
 const SCHEDULE_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
+interface ScheduleTeamRef {
+  teamId?: number;
+  teamCity?: string;
+  teamName?: string;
+  teamTricode?: string;
+}
+
 interface ScheduleEnvelope {
   leagueSchedule: {
+    seasonYear?: string;
     gameDates: Array<{
       gameDate: string;
       games: Array<{
         gameId?: string;
         gameDateUTC?: string;
-        homeTeam?: { teamId?: number };
-        awayTeam?: { teamId?: number };
+        gameStatus?: number;
+        homeTeam?: ScheduleTeamRef;
+        awayTeam?: ScheduleTeamRef;
       }>;
     }>;
   };
+}
+
+export interface PlayoffScheduleGame {
+  gameId: string;
+  gameDateUTC: Date;
+  homeTeamId: number;
+  homeTeamName: string;
+  homeTricode: string;
+  awayTeamId: number;
+  awayTeamName: string;
+  awayTricode: string;
 }
 
 let scheduleCache: { data: ScheduleEnvelope; fetchedAt: number } | null = null;
@@ -326,6 +346,51 @@ interface RawCommonTeamRoster {
 // ── Service ──────────────────────────────────────────────────────
 
 export const nbaStatsService = {
+  /**
+   * Return all playoff games from the cached schedule. A playoff game's
+   * gameId begins with "00425" for the 2025-26 season; the leading "0042"
+   * is the playoffs prefix and the next digit is the season indicator.
+   * Returns [] if the schedule fetch fails.
+   */
+  async getPlayoffGames(): Promise<PlayoffScheduleGame[]> {
+    const schedule = await getCachedSchedule();
+    if (!schedule) return [];
+
+    const out: PlayoffScheduleGame[] = [];
+    for (const day of schedule.leagueSchedule.gameDates) {
+      for (const g of day.games) {
+        if (!g.gameId?.startsWith("0042")) continue;
+        const h = g.homeTeam;
+        const a = g.awayTeam;
+        if (!h?.teamId || !a?.teamId) continue;
+        if (!h.teamTricode || !a.teamTricode) continue;
+        if (!g.gameDateUTC) continue;
+        const dt = new Date(g.gameDateUTC);
+        if (Number.isNaN(dt.getTime())) continue;
+        out.push({
+          gameId: g.gameId,
+          gameDateUTC: dt,
+          homeTeamId: h.teamId,
+          homeTeamName: h.teamName ?? "",
+          homeTricode: h.teamTricode,
+          awayTeamId: a.teamId,
+          awayTeamName: a.teamName ?? "",
+          awayTricode: a.teamTricode,
+        });
+      }
+    }
+    return out;
+  },
+
+  /**
+   * Return the cached schedule's seasonYear (e.g. "2025-26") or null if the
+   * schedule isn't available.
+   */
+  async getSeasonYear(): Promise<string | null> {
+    const schedule = await getCachedSchedule();
+    return schedule?.leagueSchedule.seasonYear ?? null;
+  },
+
   /**
    * Fetch live box score for a specific game.
    * Returns null on error (callers should use last-known data).

@@ -29,7 +29,7 @@ import {
   autoAssignMissingPicks,
 } from "~/server/services/draft-window";
 import { nbaStatsService } from "~/server/services/nba-stats";
-import { SERIES_STUBS } from "~/lib/constants";
+import { getPlayoffSeries } from "~/server/services/playoff-series";
 import { calculateFantasyPoints } from "~/server/services/scoring";
 import { isPlayerEligibleForDraft } from "~/server/services/eligibility";
 import { enqueueJob } from "~/server/services/job-queue";
@@ -305,9 +305,7 @@ export const draftRouter = createTRPCRouter({
       // Resolve real NBA game ID if placeholder
       let nbaGameId = game.nbaGameId;
       if (nbaGameId.startsWith("game")) {
-        const stub = SERIES_STUBS.find(
-          (s) => s.id === game.league.seriesId,
-        );
+        const stub = await getPlayoffSeries(ctx.db, game.league.seriesId);
         if (!stub) {
           throw new TRPCError({
             code: "NOT_FOUND",
@@ -360,9 +358,7 @@ export const draftRouter = createTRPCRouter({
       }
 
       // Ensure NbaSeries and NbaGame records exist (FK required by BoxScore)
-      const stub = SERIES_STUBS.find(
-        (s) => s.id === game.league.seriesId,
-      );
+      const stub = await getPlayoffSeries(ctx.db, game.league.seriesId);
       if (stub) {
         const series = await ctx.db.nbaSeries.upsert({
           where: { seriesId: stub.id },
@@ -951,9 +947,7 @@ export const draftRouter = createTRPCRouter({
       const boxScore = await nbaStatsService.getLiveBoxScore(game.nbaGameId);
 
       // Resolve series metadata for team names
-      const seriesStub = SERIES_STUBS.find(
-        (s) => s.id === game.league.seriesId,
-      );
+      const seriesStub = await getPlayoffSeries(ctx.db, game.league.seriesId);
 
       let allPlayers: Array<{
         personId: number;

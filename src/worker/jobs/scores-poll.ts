@@ -19,7 +19,8 @@ import { enqueueJob } from "~/server/services/job-queue";
 import { nbaStatsService } from "~/server/services/nba-stats";
 import { calculateFantasyPoints } from "~/server/services/scoring";
 import { autoGenerateProvisionalNext } from "~/server/services/draft-order";
-import { LIVE_SCORE_POLL_INTERVAL_MS, SERIES_STUBS } from "~/lib/constants";
+import { LIVE_SCORE_POLL_INTERVAL_MS } from "~/lib/constants";
+import { getPlayoffSeries } from "~/server/services/playoff-series";
 
 export type ScoresPollPayload = {
   leagueId: string;
@@ -93,7 +94,7 @@ export async function handleScoresPoll(
   }
 
   // Ensure NbaSeries + NbaGame records exist (FK required by BoxScore)
-  const stub = SERIES_STUBS.find((s) => s.id === game.league.seriesId);
+  const stub = await getPlayoffSeries(db, game.league.seriesId);
   if (stub) {
     const series = await db.nbaSeries.upsert({
       where: { seriesId: stub.id },
@@ -285,7 +286,7 @@ function scheduleNext(leagueId: string, gameId: string) {
  * Returns the real NBA gameId (e.g. "0042500101") or null.
  */
 async function resolveNbaGameId(seriesId: string): Promise<string | null> {
-  const stub = SERIES_STUBS.find((s) => s.id === seriesId);
+  const stub = await getPlayoffSeries(db, seriesId);
   if (!stub) return null;
 
   const scoreboard = await nbaStatsService.getTodaysScoreboard();

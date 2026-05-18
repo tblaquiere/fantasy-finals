@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { api } from "~/trpc/react";
-import { SERIES_STUBS, CLOCK_DURATION_OPTIONS } from "~/lib/constants";
+import { CLOCK_DURATION_OPTIONS } from "~/lib/constants";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -22,6 +22,10 @@ export function CreateLeagueForm() {
   const [seriesId, setSeriesId] = useState("");
   const [clockDurationMinutes, setClockDurationMinutes] = useState<number>(30);
   const [error, setError] = useState<string | null>(null);
+
+  const seriesList = api.series.listAvailable.useQuery(undefined, {
+    staleTime: 60_000,
+  });
 
   const createLeague = api.league.createLeague.useMutation({
     onSuccess: ({ leagueId }) => {
@@ -61,12 +65,20 @@ export function CreateLeagueForm() {
 
       <div className="space-y-2">
         <Label className="text-zinc-300">Playoff Series</Label>
-        <Select onValueChange={setSeriesId} value={seriesId}>
+        <Select
+          onValueChange={setSeriesId}
+          value={seriesId}
+          disabled={seriesList.isLoading}
+        >
           <SelectTrigger className="border-zinc-700 bg-zinc-800 text-white">
-            <SelectValue placeholder="Select a series" />
+            <SelectValue
+              placeholder={
+                seriesList.isLoading ? "Loading series…" : "Select a series"
+              }
+            />
           </SelectTrigger>
           <SelectContent className="border-zinc-700 bg-zinc-900">
-            {SERIES_STUBS.map((series) => (
+            {(seriesList.data ?? []).map((series) => (
               <SelectItem
                 key={series.id}
                 value={series.id}

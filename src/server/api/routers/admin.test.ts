@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { createCaller } from "~/server/api/root";
-import { db, makeSession } from "~/test/helpers";
+import { db, makeSession, seedTestSeries } from "~/test/helpers";
 
 function makeCaller(userId: string, role: "participant" | "commissioner" | "admin" = "participant") {
   return createCaller({
@@ -26,6 +26,7 @@ beforeEach(async () => {
     create: { id: "test-admin-user3", email: "part@example.com", role: "participant" },
     update: { role: "participant" },
   });
+  await seedTestSeries();
 });
 
 afterEach(async () => {

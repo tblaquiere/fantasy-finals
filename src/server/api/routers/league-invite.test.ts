@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { TRPCError } from "@trpc/server";
 
 import { createCaller } from "~/server/api/root";
-import { db, makeSession } from "~/test/helpers";
+import { db, makeSession, seedTestSeries } from "~/test/helpers";
 
 function makeCaller(session = makeSession({ role: "commissioner" })) {
   return createCaller({ db, session, headers: new Headers() });
@@ -14,6 +14,7 @@ beforeEach(async () => {
     create: { id: "test-user-id", email: "test@example.com", role: "commissioner" },
     update: { role: "commissioner" },
   });
+  await seedTestSeries();
 });
 
 afterEach(async () => {

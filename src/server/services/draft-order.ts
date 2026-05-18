@@ -10,8 +10,8 @@
  */
 
 import type { PrismaClient, Prisma } from "generated/prisma";
-import { SERIES_STUBS } from "~/lib/constants";
 import { nbaStatsService } from "~/server/services/nba-stats";
+import { getPlayoffSeries } from "~/server/services/playoff-series";
 
 export interface ParticipantStanding {
   participantId: string;
@@ -226,7 +226,7 @@ export async function autoGenerateProvisionalNext(
   if (!justFinalized) {
     return { resolved: false, reason: "just-finalized game not found" };
   }
-  const stub = SERIES_STUBS.find((s) => s.id === justFinalized.league.seriesId);
+  const stub = await getPlayoffSeries(db, justFinalized.league.seriesId);
   if (!stub) {
     return { resolved: false, reason: `unknown series ${justFinalized.league.seriesId}` };
   }

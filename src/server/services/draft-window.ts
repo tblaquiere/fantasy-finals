@@ -8,7 +8,8 @@
 import type { PrismaClient } from "generated/prisma";
 import { enqueueJob } from "~/server/services/job-queue";
 import { nbaStatsService, type NbaPlayerStats } from "~/server/services/nba-stats";
-import { SERIES_STUBS, LIVE_SCORE_POLL_INTERVAL_MS } from "~/lib/constants";
+import { LIVE_SCORE_POLL_INTERVAL_MS } from "~/lib/constants";
+import { getPlayoffSeries } from "~/server/services/playoff-series";
 import { isPlayerEligibleForDraft } from "~/server/services/eligibility";
 
 /**
@@ -124,7 +125,7 @@ export async function closeDraftWindow(
   // Try to resolve a real NBA game ID if the current one is a placeholder
   let nbaGameId = game.nbaGameId;
   if (nbaGameId.startsWith("game")) {
-    const resolved = await resolveNbaGameId(game.league.seriesId);
+    const resolved = await resolveNbaGameId(db, game.league.seriesId);
     if (resolved) {
       nbaGameId = resolved;
     } else {
@@ -166,9 +167,10 @@ export async function closeDraftWindow(
  * Returns the real NBA gameId (e.g. "0042500101") or null if not found.
  */
 async function resolveNbaGameId(
+  db: PrismaClient,
   seriesId: string,
 ): Promise<string | null> {
-  const stub = SERIES_STUBS.find((s) => s.id === seriesId);
+  const stub = await getPlayoffSeries(db, seriesId);
   if (!stub) return null;
 
   const scoreboard = await nbaStatsService.getTodaysScoreboard();
@@ -233,7 +235,7 @@ export async function autoAssignMissingPicks(
       ...boxScore.awayTeam.players,
     ];
   } else {
-    const stub = SERIES_STUBS.find((s) => s.id === seriesId);
+    const stub = await getPlayoffSeries(db, seriesId);
     if (!stub) return 0;
 
     const rosterPlayers = await db.nbaPlayer.findMany({

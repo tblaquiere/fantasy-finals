@@ -1,11 +1,11 @@
 /**
- * Populate NbaSeries + NbaPlayer records from NBA API or SERIES_STUBS metadata.
+ * Populate NbaSeries + NbaPlayer records from NBA API.
  * Called during league creation when the series doesn't exist in the DB yet.
  */
 
 import type { PrismaClient } from "../../../generated/prisma/index.js";
-import { SERIES_STUBS } from "~/lib/constants";
 import { nbaStatsService } from "./nba-stats";
+import { getPlayoffSeries } from "./playoff-series";
 
 export async function ensureSeriesPopulated(
   db: PrismaClient,
@@ -25,7 +25,7 @@ export async function ensureSeriesPopulated(
     if (playerCount > 0) return; // fully populated
   }
 
-  const stub = SERIES_STUBS.find((s) => s.id === seriesId);
+  const stub = await getPlayoffSeries(db, seriesId);
   if (!stub) {
     console.error(`[populate-series] Unknown series ID: ${seriesId}`);
     return;
