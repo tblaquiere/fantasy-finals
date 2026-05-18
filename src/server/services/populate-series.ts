@@ -11,19 +11,15 @@ export async function ensureSeriesPopulated(
   db: PrismaClient,
   seriesId: string,
 ): Promise<void> {
-  // Already populated?
+  // Always re-fetch on call. The previous "if any players exist, skip"
+  // shortcut was unsafe: stale partial rows from a seed/test league could
+  // satisfy the check and prevent the real playoff roster from ever being
+  // populated (incident: WCF Thunder roster missing SGA and 8 others
+  // because 6 stale seed rows from 2026-03-30 looked "populated enough").
+  // This function only runs on league creation, so re-fetching is cheap.
   const existing = await db.nbaSeries.findUnique({
     where: { seriesId },
   });
-  if (existing) {
-    // Check if players exist for this series
-    const playerCount = await db.nbaPlayer.count({
-      where: {
-        teamId: { in: [existing.homeTeamId, existing.awayTeamId] },
-      },
-    });
-    if (playerCount > 0) return; // fully populated
-  }
 
   const stub = await getPlayoffSeries(db, seriesId);
   if (!stub) {
@@ -71,7 +67,33 @@ export async function ensureSeriesPopulated(
     return;
   }
 
-  // Upsert players
+  // Retire stale rows: anything currently tagged with this team's teamId
+  // but absent from the live box-score roster. Set teamId=0 / tricode=LEGACY-*
+  // so the row no longer surfaces in the draft picker (which queries by
+  // teamId) but FK references from older Pick / PreferenceListItem /
+  // BoxScore rows still resolve.
+  const realIds = new Set<number>(
+    allPlayers.map((p) => p.personId).filter(Boolean),
+  );
+  for (const teamId of [stub.homeTeamId, stub.awayTeamId]) {
+    const tricode =
+      teamId === stub.homeTeamId ? stub.homeTricode : stub.awayTricode;
+    const stale = await db.nbaPlayer.findMany({
+      where: { teamId, nbaPlayerId: { notIn: [...realIds] } },
+      select: { nbaPlayerId: true, firstName: true, familyName: true },
+    });
+    for (const s of stale) {
+      console.warn(
+        `[populate-series] retiring stale ${tricode} row: ${s.nbaPlayerId} ${s.firstName} ${s.familyName}`,
+      );
+      await db.nbaPlayer.update({
+        where: { nbaPlayerId: s.nbaPlayerId },
+        data: { teamId: 0, teamTricode: `LEGACY-${tricode}` },
+      });
+    }
+  }
+
+  // Upsert real players
   let created = 0;
   for (const p of allPlayers) {
     if (!p.personId) continue;
