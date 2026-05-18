@@ -234,10 +234,15 @@ async function rateLimitedFetch(url: string): Promise<Response> {
   }
   lastRequestTime = Date.now();
 
+  // NBA's Akamai edge began returning 403 for non-browser User-Agents and for
+  // requests missing Origin/Referer. Mirror a real browser to stay accepted.
   return fetch(url, {
     headers: {
-      "User-Agent": "Mozilla/5.0 (compatible; FantasyFinals/1.0)",
+      "User-Agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       Accept: "application/json",
+      Referer: "https://www.nba.com/",
+      Origin: "https://www.nba.com",
     },
     signal: AbortSignal.timeout(NBA_REQUEST_TIMEOUT_MS),
   });
