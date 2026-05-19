@@ -91,9 +91,14 @@ development_status:
   epic-5-retrospective: optional
 
   # Epic 6: Standings, Category Leaders & Post-Game Corrections
-  epic-6: backlog
-  6-1-series-leaderboard: backlog
-  6-2-per-game-stat-breakdown: backlog
-  6-3-burned-player-visibility: backlog
-  6-4-automatic-post-game-stat-corrections: backlog
+  epic-6: done
+  6-1-series-leaderboard: done
+  6-2-per-game-stat-breakdown: done
+  6-3-burned-player-visibility: done
+  6-4-automatic-post-game-stat-corrections: done
   epic-6-retrospective: optional
+
+  # Epic 7: Scheduled Draft Window Open
+  epic-7: in-progress
+  7-1-auto-open-draft-window: ready-for-dev
+  epic-7-retrospective: optional

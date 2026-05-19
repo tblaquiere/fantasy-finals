@@ -1168,3 +1168,56 @@ So that the leaderboard is always accurate without anyone doing manual recalcula
 **Given** the correction affects a game with a Mozgov replacement
 **When** recalculation runs
 **Then** the correction is applied to the replacement player's stats (not the voided original)
+
+---
+
+## Epic 7: Scheduled Draft Window Open
+
+Today the commissioner manually opens the draft window from League Settings before each game. This epic automates the open based on a configurable offset before NBA tipoff, with hard validation that the offset is long enough for every participant to use their full selection clock, and an hourly reconcile job that re-schedules when NBA pushes tipoff.
+
+**FRs covered:** *to be added on PRD refresh*
+
+### Story 7.1: Auto-Open Draft Window Before Tipoff
+
+As a commissioner,
+I want the draft window to open automatically a configured number of minutes before tipoff,
+So that I don't have to remember to start each game's draft manually.
+
+**Acceptance Criteria:**
+
+**Given** I am a commissioner editing League Settings
+**When** I save a `draftOpenOffsetMinutes` value (default 150)
+**Then** the value is persisted on the League and applied as the default to every Game in the series
+
+**Given** I am viewing the game detail page for an upcoming game
+**When** I set a per-game `draftOpenOffsetMinutes` override and save
+**Then** that game uses the override instead of the league default
+**And** the page renders a preview in the viewer's local timezone (e.g. *"Draft will open Tuesday at 5:30 PM local"*)
+
+**Given** I attempt to save an offset where `offset < participants × clockDurationMinutes + 15`
+**When** I submit
+**Then** the save is rejected
+**And** the error message states the minimum legal offset with the formula breakdown (e.g. *"With 5 participants × 30-min clocks + 15-min buffer, set the offset to at least 165 minutes"*)
+
+**Given** an upcoming game has both a known NBA tipoff (`NbaGame.gameDate`) and an effective offset
+**When** the system computes `scheduledDraftOpenAt = tipoff − offset`
+**Then** a `draft.open` pg-boss job is enqueued with `startAfter = scheduledDraftOpenAt`
+
+**Given** a `draft.open` job fires for a game
+**When** the game's status is not `pending`
+**Then** the handler no-ops cleanly (idempotent — covers manual override, prior fire, or double-enqueue)
+
+**Given** there are upcoming scheduled games
+**When** the hourly `draft.reconcile` job runs
+**Then** for each such game it re-resolves tipoff from the NBA schedule
+**And** if tipoff drifted by more than 5 minutes from `scheduledDraftOpenAt + offset`, it recomputes and re-enqueues the `draft.open` job
+
+**Given** a participant joins or leaves a league with upcoming scheduled games
+**When** the change makes the effective offset fall below the legal minimum for any of those games
+**Then** the system auto-bumps that game's `draftOpenOffsetMinutes` to the new legal minimum
+**And** re-enqueues the `draft.open` job at the new `scheduledDraftOpenAt`
+**And** sends a notification to the commissioner explaining the change
+
+**Given** the league home page or game detail page is being viewed
+**When** a draft is scheduled but not yet open
+**Then** a countdown widget displays *"Next draft opens in 2h 30m"* (or equivalent), refreshing in real time
