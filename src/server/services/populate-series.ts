@@ -67,31 +67,19 @@ export async function ensureSeriesPopulated(
     return;
   }
 
-  // Retire stale rows: anything currently tagged with this team's teamId
-  // but absent from the live box-score roster. Set teamId=0 / tricode=LEGACY-*
-  // so the row no longer surfaces in the draft picker (which queries by
-  // teamId) but FK references from older Pick / PreferenceListItem /
-  // BoxScore rows still resolve.
-  const realIds = new Set<number>(
-    allPlayers.map((p) => p.personId).filter(Boolean),
-  );
-  for (const teamId of [stub.homeTeamId, stub.awayTeamId]) {
-    const tricode =
-      teamId === stub.homeTeamId ? stub.homeTricode : stub.awayTricode;
-    const stale = await db.nbaPlayer.findMany({
-      where: { teamId, nbaPlayerId: { notIn: [...realIds] } },
-      select: { nbaPlayerId: true, firstName: true, familyName: true },
-    });
-    for (const s of stale) {
-      console.warn(
-        `[populate-series] retiring stale ${tricode} row: ${s.nbaPlayerId} ${s.firstName} ${s.familyName}`,
-      );
-      await db.nbaPlayer.update({
-        where: { nbaPlayerId: s.nbaPlayerId },
-        data: { teamId: 0, teamTricode: `LEGACY-${tricode}` },
-      });
-    }
-  }
+  // NOTE: previous versions of this function (commit 9a3864b, 2026-05-19)
+  // retired any NbaPlayer tagged with a team's teamId but absent from the
+  // current box score, moving them to teamId=0 / tricode=LEGACY-*. That was
+  // unsafe: legitimate roster members DNP all the time, and the single box
+  // score we scrape is not authoritative for full team membership. The
+  // logic mass-retired most of the Knicks bench (Brunson, Bridges, Hart,
+  // KAT, etc.) and Grizzlies bench (Bane, JJJ, Smart, etc.) on 2026-05-19
+  // during routine league creation, breaking participant preference lists.
+  //
+  // If duplicate "seed-fake" rows reappear later (e.g. wrong personIds
+  // attached to real player names on the same team), add a narrow dedup
+  // step keyed on (teamId + firstName + familyName) — NOT the broad
+  // "absent from box score" heuristic.
 
   // Upsert real players
   let created = 0;
