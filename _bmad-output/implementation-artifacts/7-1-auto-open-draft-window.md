@@ -24,16 +24,17 @@ So that I don't have to remember to manually start each game's draft.
 **And** the form renders a live preview in the viewer's local timezone (e.g. *"Draft will open Tuesday at 5:30 PM local time"*)
 
 ### AC3: Hard Validation with Formula in Error
-**Given** I attempt to save an offset where `offset < participants × clockDurationMinutes + 15`
+**Given** I attempt to save an offset where `offset < participants × clockDurationMinutes + DRAFT_TIPOFF_BUFFER_MINUTES`
 **When** I submit (League Settings or Game override)
-**Then** the save is rejected (server-side + mirrored client-side)
+**Then** the save is rejected (server-side, with client-side mirror for UX)
 **And** the error message states the minimum legal offset with the formula breakdown — e.g. *"With 5 participants × 30-min clocks + 15-min buffer, set the offset to at least 165 minutes."*
 
-### AC4: Job Enqueue on Schedule Computation
+### AC4: Modify `calcDraftOpenTime` — Tipoff-Relative Instead of 9am PST
 **Given** an upcoming game has both a known NBA tipoff (`NbaGame.gameDate`) and an effective offset
-**When** the system computes `scheduledDraftOpenAt = tipoff − offset`
-**Then** `Game.scheduledDraftOpenAt` is persisted
-**And** a `draft.open` pg-boss job is enqueued with `startAfter = scheduledDraftOpenAt` and `singletonKey = "draft.open:<gameId>"`
+**When** the existing `draft.order-publish` handler runs (after the prior game finalizes) or `autoGenerateProvisionalNext` creates a new Game
+**Then** `calcDraftOpenTime(tipoff, effectiveOffsetMinutes)` returns `tipoff − offset`
+**And** `Game.draftOpensAt` is persisted with that value
+**And** a `draft.open` pg-boss job is enqueued with `startAfter = draftOpensAt` and `singletonKey = "draft.open:<gameId>"`
 
 ### AC5: Idempotent `draft.open` Handler
 **Given** the `draft.open` job fires for a game
@@ -41,141 +42,177 @@ So that I don't have to remember to manually start each game's draft.
 **Then** the handler logs the skip reason and no-ops cleanly (covers manual override, prior fire, double-enqueue)
 
 ### AC6: Hourly Reconcile Loop for Tipoff Drift
-**Given** there are upcoming games with `scheduledDraftOpenAt` set and status `pending`
+**Given** there are upcoming games with `draftOpensAt` set and status `pending`
 **When** the `draft.reconcile` job runs (self-scheduling every 1 hour)
 **Then** for each such game it re-resolves tipoff from the NBA schedule
-**And** if the new tipoff differs from `scheduledDraftOpenAt + effective_offset` by more than 5 minutes, it recomputes `scheduledDraftOpenAt`, updates `Game.scheduledDraftOpenAt`, and re-enqueues `draft.open` (relies on `singletonKey` to displace the prior schedule)
+**And** if the new tipoff differs from `draftOpensAt + effective_offset` by more than 5 minutes, it recomputes `draftOpensAt`, updates the Game, and re-enqueues `draft.open` (cancelling the prior queued job first — see Task 6 note on pg-boss singletonKey semantics)
 
 ### AC7: Auto-Bump on Participant Count Change
 **Given** a participant joins or leaves a league with upcoming `pending` games
-**When** the change makes the effective offset fall below the legal minimum (`participants × clock + 15`) for any such game
+**When** the change makes the effective offset fall below the legal minimum (`participants × clock + DRAFT_TIPOFF_BUFFER_MINUTES`) for any such game
 **Then** the system writes the new legal minimum to that game's `draftOpenOffsetMinutes`
-**And** re-enqueues `draft.open` at the new `scheduledDraftOpenAt`
+**And** re-enqueues `draft.open` at the new `draftOpensAt`
 **And** enqueues a `notification.send` (type `draft-offset-bumped`) to the commissioner explaining the change
 
-### AC8: Countdown Widget on League Home
-**Given** a draft is scheduled (`scheduledDraftOpenAt` in the future, status `pending`) and visible to a participant
+### AC8: Countdown Widget on League Home and Game Detail
+**Given** a draft is scheduled (`draftOpensAt` in the future, status `pending`) and visible to a participant
 **When** they view the league home page or game detail page
 **Then** a countdown displays *"Next draft opens in 2h 30m"* (or equivalent), updating live without page reload
+**And** when the countdown reaches 0, it swaps to "*Draft is opening shortly…*" until status flips to `draft-open`
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Schema changes** (AC: 1, 2, 4)
-  - [ ] Add `draftOpenOffsetMinutes Int @default(150) @map("draft_open_offset_minutes")` to `League` model in `prisma/schema.prisma`
-  - [ ] Add `draftOpenOffsetMinutes Int? @map("draft_open_offset_minutes")` (nullable override) to `Game` model
-  - [ ] Add `scheduledDraftOpenAt DateTime? @map("scheduled_draft_open_at")` to `Game` model (already have `draftOpensAt`/`draftClosesAt` from Story 3.4 — `scheduledDraftOpenAt` is the *target* set by this system; `draftOpensAt` continues to record the actual open time set by the `draft.open` handler)
+- [ ] **Task 1: Constants + schema** (AC: 1, 2, 3, 4)
+  - [ ] Add `DRAFT_TIPOFF_BUFFER_MINUTES = 15` to `src/lib/constants.ts` (matches the `MOZGOV_THRESHOLD_MINUTES` pattern)
+  - [ ] Add `draftOpenOffsetMinutes Int @default(150) @map("draft_open_offset_minutes")` to `League` in `prisma/schema.prisma`
+  - [ ] Add `draftOpenOffsetMinutes Int? @map("draft_open_offset_minutes")` (nullable override) to `Game`
+  - [ ] **Reuse the existing `Game.draftOpensAt`** field from Story 3.4 as the scheduled open time — do NOT add a parallel `scheduledDraftOpenAt` column
   - [ ] Run `pnpm prisma db push` (Railway migration drift — do NOT use `migrate dev`; same note as Story 3.3)
   - [ ] Re-run `pnpm prisma generate`
 
-- [ ] **Task 2: Validation helper** (AC: 3, 7)
+- [ ] **Task 2: Validation + offset-resolution service** (AC: 3, 7)
   - [ ] New `src/server/services/draft-open-schedule.ts` exporting:
-    - `minLegalOffsetMinutes(participantCount: number, clockDurationMinutes: number): number` — returns `participantCount * clockDurationMinutes + 15`
+    - `minLegalOffsetMinutes(participantCount: number, clockDurationMinutes: number): number` — returns `participantCount * clockDurationMinutes + DRAFT_TIPOFF_BUFFER_MINUTES`
     - `validateOffset(participants, clock, offset): { ok: true } | { ok: false; minRequired: number; message: string }` — returns the user-facing error message including the formula breakdown
     - `effectiveOffset(game: { draftOpenOffsetMinutes: number | null }, league: { draftOpenOffsetMinutes: number }): number` — game override wins over league default
-    - `computeScheduledDraftOpenAt(tipoffUTC: Date, offsetMinutes: number): Date`
-  - [ ] Unit tests for each (file: `src/server/services/draft-open-schedule.test.ts`)
+    - `revalidateOffsetsForLeague(db, leagueId): Promise<{ bumpedGameIds: string[] }>` — used by AC7; iterates pending games, auto-bumps any whose effective offset is below the new min, persists, re-enqueues `draft.open`, enqueues commissioner notification
+    - `rescheduleAllPendingGames(db, leagueId): Promise<void>` — iterates pending games, recomputes `draftOpensAt` via the modified `calcDraftOpenTime`, persists, re-enqueues. Used after League settings change.
+  - [ ] Unit tests for the pure helpers in `src/server/services/draft-open-schedule.test.ts`
+  - [ ] **Do not** add a time-computation helper here — that logic lives in `calcDraftOpenTime` (modified in Task 5)
 
 - [ ] **Task 3: League Settings — update default offset** (AC: 1, 3)
-  - [ ] Add `updateLeagueSettings` mutation to `src/server/api/routers/league.ts`: input `{ leagueId, draftOpenOffsetMinutes }`, commissioner-only, validates against `minLegalOffsetMinutes` using current participant count + league.clockDurationMinutes, throws `BAD_REQUEST` with the formula message on fail
-  - [ ] On success: rescheduleAllPendingGames helper (Task 5) is called so existing pending games pick up the new default
-  - [ ] Surface the new field in the League Settings UI (`src/components/league/LeagueSettings.tsx` — or equivalent; check existing patterns) with inline validation that calls the same helper client-side
+  - [ ] Add `updateLeagueSettings` mutation to `src/server/api/routers/league.ts`: input `{ leagueId, draftOpenOffsetMinutes }`, commissioner-only, calls `validateOffset` with current participant count + `league.clockDurationMinutes`, throws `BAD_REQUEST` with the formula message on fail
+  - [ ] On success: call `rescheduleAllPendingGames(db, leagueId)` so existing pending games pick up the new default
+  - [ ] Surface the new field in the League Settings UI (`src/components/league/LeagueSettings.tsx` — or whatever the existing settings component is; grep first) with inline validation that mirrors `validateOffset` client-side
   - [ ] Show the minimum legal value as helper text below the field
 
 - [ ] **Task 4: Game Detail — per-game override + preview** (AC: 2, 3)
-  - [ ] Add `updateGameDraftOffset` mutation to `src/server/api/routers/draft.ts` (or `game.ts`): input `{ gameId, draftOpenOffsetMinutes: number | null }`, commissioner-only, validates with same helper, clears + re-enqueues `draft.open` job on success (Task 5)
-  - [ ] On the game detail page (`src/app/league/[leagueId]/game/[gameId]/page.tsx` if exists, else add), render the override field with the live local-timezone preview below it
+  - [ ] Add `updateGameDraftOffset` mutation to `src/server/api/routers/draft.ts` (or `game.ts`): input `{ gameId, draftOpenOffsetMinutes: number | null }`, commissioner-only, validates with the same helper, persists, and re-runs `calcDraftOpenTime` + re-enqueues `draft.open` (delete the prior queued job first — see Task 6 note)
+  - [ ] On `src/app/league/[leagueId]/game/[gameId]/page.tsx`, render the override field with the live local-timezone preview below it
   - [ ] Preview formula: `tipoff − effective_offset`, formatted with `Intl.DateTimeFormat(undefined, { weekday: "long", hour: "numeric", minute: "2-digit", timeZoneName: "short" })`
 
-- [ ] **Task 5: Schedule + re-enqueue service** (AC: 4, 6, 7)
-  - [ ] Extend `src/server/services/draft-open-schedule.ts` with:
-    - `scheduleDraftOpen(db, gameId)`: loads game + league + nbaGame, computes `scheduledDraftOpenAt`, persists it on Game, enqueues `draft.open` with `startAfter` and `singletonKey: "draft.open:<gameId>"`. If tipoff isn't known yet, persists nothing and logs a skip. Idempotent — safe to call repeatedly.
-    - `rescheduleAllPendingGames(db, leagueId)`: iterates pending games for the league, calls `scheduleDraftOpen` for each. Used after league offset change.
-  - [ ] Wire `scheduleDraftOpen` into the existing `createNextGame` / `autoGenerateProvisionalNext` paths in `src/server/services/draft-order.ts` so newly-created games schedule themselves the moment tipoff is known
+- [ ] **Task 5: Modify the existing auto-open path** (AC: 4)
+  - [ ] **MODIFY** `src/worker/jobs/draft-order-publish.ts`:
+    - Change `calcDraftOpenTime` signature to `calcDraftOpenTime(tipoffUTC: Date, offsetMinutes: number): Date` and have it return `new Date(tipoffUTC.getTime() - offsetMinutes * 60_000)`. Drop the existing 9am PST / `Intl.DateTimeFormat` logic entirely.
+    - In the handler body, load `League.draftOpenOffsetMinutes` + the new `Game.draftOpenOffsetMinutes`, derive `effectiveOffset`, fetch `NbaGame.gameDate` (the `tipOffTime` payload field already carries tipoff — use it directly), then call the new `calcDraftOpenTime(tipoff, effective)`
+    - If tipoff is unknown, persist nothing for `draftOpensAt` and log; `draft.reconcile` (Task 7) will pick it up when tipoff resolves
+    - Existing tests on this handler will break — update them
+  - [ ] **MODIFY** `src/server/services/draft-order.ts` `autoGenerateProvisionalNext`: after the new Game is created, mirror the same logic (compute `draftOpensAt`, persist, enqueue `draft.open` with the singleton key). This is the other path that creates Games and was not previously setting `draftOpensAt`.
+  - [ ] No new `scheduleDraftOpen` service needed — the modified `calcDraftOpenTime` + the two call sites above ARE the schedule mechanism
 
-- [ ] **Task 6: Idempotent `draft.open` handler** (AC: 5)
-  - [ ] In `src/worker/jobs/draft-open.ts`, at the top of `handleDraftOpen`, load the game; if `game.status !== "pending"`, log and return early
+- [ ] **Task 6: Idempotent `draft.open` handler + singletonKey re-enqueue semantics** (AC: 5)
+  - [ ] In `src/worker/jobs/draft-open.ts`, at the top of `handleDraftOpen`, load the game; if `game.status !== "pending"`, log a clear skip line (e.g. `[worker] draft.open: skipping <gameId>, status=<status>`) and return early
   - [ ] Add tests in `src/worker/jobs/draft-open.test.ts` (create if missing) for: (a) happy-path opens, (b) status=`draft-open` is no-op, (c) status=`active` is no-op, (d) status=`final` is no-op
-  - [ ] Ensure `singletonKey` is honored by the existing pg-boss config — `JOB_QUEUES` entry for `draft.open` may need `singletonKey` support; verify in `src/lib/job-queues.ts`
+  - [ ] **pg-boss singletonKey nuance:** by default, `boss.send(name, payload, { singletonKey })` REJECTS duplicate enqueues with the same key — it does NOT replace the prior job. To "re-schedule" the same game, the caller must either:
+    - (a) Delete the prior queued job for that game first via `boss.cancel()` or `boss.complete()`, OR
+    - (b) Use `singletonHours` / `singletonMinutes` with `useSingletonQueue: true` (different semantics — read pg-boss docs)
+  - [ ] Recommend (a): in the helper that re-enqueues (used by Tasks 4, 5, 7, 8), first call `boss.deleteQueue` filtered by the singletonKey, then enqueue. Encapsulate this in a small `replaceJob(name, key, payload, options)` helper in `src/server/services/job-queue.ts` so the pattern is reusable
+  - [ ] The `JOB_QUEUES` entry for `draft.open` in `src/lib/job-queues.ts` does not need changes (singletonKey is a per-send option, not a queue config)
 
-- [ ] **Task 7: New `draft.reconcile` job + handler** (AC: 6)
+- [ ] **Task 7: New `draft.reconcile` queue + handler + bootstrap** (AC: 6)
   - [ ] Add new entry to `JOB_QUEUES` in `src/lib/job-queues.ts`: `{ name: "draft.reconcile", retryLimit: 2, retryDelay: 60, retryBackoff: true, expireInSeconds: 300, deleteAfterSeconds: 86400 }`
-  - [ ] Create `src/worker/jobs/draft-reconcile.ts`: self-scheduling handler that runs every 1 hour. For each pending game with `scheduledDraftOpenAt` set, re-resolves tipoff via `nbaStatsService.getNextSeriesGame()` (or check existing `NbaGame.gameDate` after a refresh), and if drift > 5 min, calls `scheduleDraftOpen` to recompute + re-enqueue
+  - [ ] Create `src/worker/jobs/draft-reconcile.ts`. Empty payload. Pattern:
+    1. Find all `pending` games with `draftOpensAt` set and tipoff in the future
+    2. For each, re-fetch tipoff via `nbaStatsService.getCachedSchedule()` (1-hour cache, so this is cheap)
+    3. Compute `newDraftOpensAt = tipoff − effectiveOffset`. If `|newDraftOpensAt − currentDraftOpensAt| > 5 min`, persist new value and call `replaceJob("draft.open", "draft.open:<gameId>", { leagueId, gameId }, { startAfter: newDraftOpensAt })`
+    4. At end, self-schedule the next reconcile: `enqueueJob("draft.reconcile", {}, { startAfter: new Date(Date.now() + 60 * 60 * 1000), singletonKey: "draft.reconcile:singleton" })`
   - [ ] Register handler in `src/worker/index.ts`
-  - [ ] Enqueue the initial `draft.reconcile` job at worker startup (similar to how scores.poll self-bootstraps; see `src/worker/index.ts`)
-  - [ ] Tests in `src/worker/jobs/draft-reconcile.test.ts` covering: (a) no drift → no re-enqueue, (b) tipoff moved 10 min later → re-enqueue, (c) game already opened → skip, (d) tipoff missing → skip
+  - [ ] **Bootstrap on worker startup:** after handler registration in `src/worker/index.ts`, add `await enqueueJob("draft.reconcile", {}, { startAfter: new Date(Date.now() + 60_000), singletonKey: "draft.reconcile:singleton" })`. The singletonKey makes the bootstrap idempotent — restart-loops won't queue duplicates.
+  - [ ] Tests in `src/worker/jobs/draft-reconcile.test.ts` covering: (a) no drift → no re-enqueue, (b) tipoff moved 10 min later → persists new `draftOpensAt` + replaces job, (c) game already opened → skip, (d) tipoff missing on `NbaGame` → skip and log
 
 - [ ] **Task 8: Auto-bump on participant join/leave** (AC: 7)
-  - [ ] In `src/server/api/routers/league.ts` `joinLeague` mutation: after the participant is created, call a new helper `revalidateOffsetsForLeague(db, leagueId)` which iterates pending games. For each game whose effective offset falls short of `minLegalOffsetMinutes(newParticipantCount, league.clockDurationMinutes)`, write the new minimum to `Game.draftOpenOffsetMinutes`, call `scheduleDraftOpen`, and enqueue a `notification.send` to the commissioner
-  - [ ] Add a `leaveLeague` mutation if not already present (check `league.ts`); on leave, call the same helper (leaving lowers the participant count, so the bump direction is the opposite — but the same min-legal recheck handles both)
-  - [ ] Notification payload type `draft-offset-bumped` — add to the notification type union (search for `"game-results"` in `src/worker/jobs/notification-send.ts` for the existing pattern)
-  - [ ] Tests in `src/server/services/draft-open-schedule.test.ts` for the revalidate path
+  - [ ] In `src/server/api/routers/league.ts` `joinLeague` mutation: after the participant is created, call `revalidateOffsetsForLeague(db, leagueId)` from the schedule service
+  - [ ] Add a `leaveLeague` mutation in `src/server/api/routers/league.ts` (does not exist yet — check first to confirm). Same shape as join. After deleting the participant, call the same revalidate helper.
+  - [ ] Notification payload type `draft-offset-bumped` — add to the handler map in `src/worker/jobs/notification-send.ts` (existing types are `game-results`, `mozgov-triggered`, `draft-order-provisional`). The message should include the new offset and an explanation: *"Participant count changed. Game N's draft offset was auto-adjusted to X minutes so every picker can finish before tipoff."*
+  - [ ] Tests in `src/server/services/draft-open-schedule.test.ts` for `revalidateOffsetsForLeague`: (a) participant joins and bumps a game, (b) participant leaves but no game is invalid → no-op, (c) game already `draft-open` → skip (don't bump in-progress drafts)
 
 - [ ] **Task 9: Countdown widget** (AC: 8)
-  - [ ] Add a client component `src/components/league/NextDraftCountdown.tsx` that takes `scheduledDraftOpenAt: Date` and renders a live countdown using `setInterval` (1s tick) — format: `"Opens in 2h 30m"` or `"Opens in 12m"` based on magnitude
-  - [ ] Embed on the league home page (`src/app/league/[leagueId]/page.tsx`) when the next upcoming game has `scheduledDraftOpenAt` set and status `pending`
+  - [ ] Add a client component `src/components/league/NextDraftCountdown.tsx` that takes `draftOpensAt: Date` and renders a live countdown using a `setInterval(1000)` — format: `"Opens in 2h 30m"` or `"Opens in 12m"` based on magnitude. When `draftOpensAt − now ≤ 0`, render `"Draft is opening shortly…"`.
+  - [ ] Embed on the league home page (`src/app/league/[leagueId]/page.tsx`) when the next upcoming game has `draftOpensAt` set and status `pending`
   - [ ] Also embed on the game detail page near the override field
-  - [ ] When countdown reaches 0, swap to "Draft is opening…" placeholder; the page should auto-refresh via existing tRPC invalidation when status flips to `draft-open`
+  - [ ] Use existing tRPC invalidation (`useUtils()` + `invalidate()`) when status flips to `draft-open` so the page swaps to the live draft view automatically
 
 - [ ] **Task 10: tRPC + page wiring** (AC: 1, 2, 4, 8)
-  - [ ] Extend the existing league `getLeague` (or add a thin `getLeagueDraftSchedule`) to return per-game `{ gameId, gameNumber, tipoff: NbaGame.gameDate, scheduledDraftOpenAt, effectiveOffsetMinutes, status }` for the upcoming-games list used by the countdown widget + game detail page
+  - [ ] Extend the existing league `getLeague` (or add a thin `getLeagueDraftSchedule`) to return per-game `{ gameId, gameNumber, tipoff: NbaGame.gameDate, draftOpensAt, effectiveOffsetMinutes, status }` for the upcoming-games list used by the countdown widget + game detail page
   - [ ] No new server context needed — uses existing `commissionerProcedure` / `protectedProcedure` guards
 
 ## Dev Notes
 
 ### Architecture
 
-- **Schedule source**: `NbaGame.gameDate` (UTC) is populated by `populate-series.ts` from the NBA static schedule when the series is created, and refreshed by the `draft.reconcile` loop. Tipoff is the canonical anchor — never store wall-clock times directly on Game.
-- **pg-boss singleton key**: `"draft.open:<gameId>"` ensures re-enqueueing for the same game displaces the prior job rather than creating a duplicate. Verify your `enqueueJob()` wrapper supports `singletonKey` (it should — check `src/server/services/job-queue.ts`).
-- **Validation buffer (15 min)**: hardcoded for now. If a config knob is needed later, add a `DRAFT_TIPOFF_BUFFER_MINUTES` constant in `src/lib/constants.ts`.
-- **Order of operations for `draft.reconcile`**: re-resolve tipoff BEFORE checking drift. The reconcile loop is the only place we re-fetch tipoff — the user-facing UI just reads `NbaGame.gameDate`.
+- **Single field for scheduled open time**: `Game.draftOpensAt` (existing, from Story 3.4) is THE scheduled open time. The new logic computes it via `calcDraftOpenTime(tipoff, offset)`. Do not add a parallel column.
+- **Schedule source**: `NbaGame.gameDate` (UTC) is populated by `populate-series.ts` from the NBA static schedule when the series is created, and refreshed by the `draft.reconcile` loop reading `nbaStatsService.getCachedSchedule()` (1-hour TTL).
+- **Validation buffer constant**: `DRAFT_TIPOFF_BUFFER_MINUTES = 15` lives in `src/lib/constants.ts`.
+- **Why `calcDraftOpenTime` instead of a new helper**: Story 3.4 already introduced a `calcDraftOpenTime` in `draft-order-publish.ts` that currently returns "9am PST next day". This story EVOLVES that function to use `tipoff − offset` instead. Avoid creating a parallel `scheduleDraftOpen` service that does the same thing differently.
+- **`draftOrderProvisional` interaction**: When `draft.open` fires and flips the game to `draft-open`, the order locks (existing 7.4 behavior). The idempotent guard in AC5 means re-fires while `draft-open` are no-ops, so the lock semantics are preserved.
+
+### Migration: existing pending games
+
+Existing pending Games already have `draftOpensAt` populated to "9am PST next day" by the old `calcDraftOpenTime`, and they have a `draft.open` job already enqueued. Deployment strategy:
+
+- **Leave already-scheduled games alone** — they will fire at the old time. Cleanest, no surprise reschedules.
+- New games created post-deploy use the new offset-based logic automatically (via the modified handler).
+- The reconcile loop (Task 7) will recompute even legacy games on its next pass, smoothly migrating them.
+
+No data migration script is required.
+
+### pg-boss singletonKey semantics
+
+`singletonKey` rejects duplicate enqueues by default rather than replacing them. The re-enqueue scenarios in this story (Tasks 4, 5, 7, 8) all need to replace, not skip. The recommended pattern is the `replaceJob(name, key, payload, options)` helper introduced in Task 6 — it cancels the prior job, then enqueues the new one. Whoever implements it: read the pg-boss `cancel()` and `complete()` docs before picking a deletion call; both are valid but `cancel()` is the safer choice for queued-but-not-started jobs.
 
 ### Existing Infrastructure to Reuse
 
 | What | Where | Notes |
 |------|-------|-------|
-| `enqueueJob()` | `src/server/services/job-queue.ts` | Supports `startAfter`; verify `singletonKey` support |
-| `JOB_QUEUES` | `src/lib/job-queues.ts` | Add `draft.reconcile` here |
-| `nbaStatsService.getNextSeriesGame()` | `src/server/services/nba-stats.ts` | Resolves a future NBA gameId from the cached schedule (3.1 + 7.3) |
-| `nbaStatsService.getCachedSchedule()` | `src/server/services/nba-stats.ts` | 1-hour cache; reconcile loop benefits from this |
-| `getPlayoffSeries(db, seriesId)` | `src/server/services/playoff-series.ts` | Schedule-derived series catalog (5/18 refactor); used when looking up team metadata |
-| `openDraftWindow()` (handler logic) | `src/server/services/draft-window.ts:339` | Existing manual-open path; the auto-open job calls this same code via `src/worker/jobs/draft-open.ts` |
-| `commissionerProcedure` | `src/server/api/trpc.ts` | tRPC middleware for commissioner-only mutations |
-| `enforceLeagueCommissioner` | `src/server/api/helpers.ts` | Auth guard for cross-cutting checks |
-| `notification.send` pattern | `src/worker/jobs/notification-send.ts` | Add `draft-offset-bumped` to the type union |
-| Self-scheduling loop pattern | `src/worker/jobs/scores-poll.ts:273-281` | `draft.reconcile` mirrors this `scheduleNext()` shape |
-| Worker registration | `src/worker/index.ts` | Add new handler registration |
+| `enqueueJob()` | `src/server/services/job-queue.ts` | Passes raw pg-boss `SendOptions`; supports `singletonKey` directly. Wrap with `replaceJob()` (Task 6) for re-enqueue semantics. |
+| `calcDraftOpenTime()` | `src/worker/jobs/draft-order-publish.ts` | EXISTING — modify to `tipoff − offset`. Do not duplicate. |
+| `draft.order-publish` handler | `src/worker/jobs/draft-order-publish.ts` | EXISTING — already sets `Game.draftOpensAt` and enqueues `draft.open` after each game finalizes. Story 7.1 evolves its `draftOpensAt` calculation. |
+| `autoGenerateProvisionalNext()` | `src/server/services/draft-order.ts` | Other hook that creates Games (mid-poll); needs the same `draftOpensAt` computation added. |
+| `JOB_QUEUES` | `src/lib/job-queues.ts` | Add `draft.reconcile` entry here. |
+| `nbaStatsService.getCachedSchedule()` | `src/server/services/nba-stats.ts` | 1-hour cache; reconcile loop reads from here. |
+| `nbaStatsService.getNextSeriesGame()` | `src/server/services/nba-stats.ts` | Resolves a future NBA gameId from cached schedule (3.1 + 7.3) — used when `NbaGame.gameDate` needs refresh. |
+| `getPlayoffSeries(db, seriesId)` | `src/server/services/playoff-series.ts` | Schedule-derived series catalog (5/18); used when looking up team metadata. |
+| `openDraftWindow()` (handler logic) | `src/server/services/draft-window.ts:339` | Existing manual-open path; the auto-open job calls this same code via `src/worker/jobs/draft-open.ts`. |
+| `commissionerProcedure` | `src/server/api/trpc.ts` | tRPC middleware for commissioner-only mutations. |
+| `enforceLeagueCommissioner` | `src/server/api/helpers.ts` | Auth guard for cross-cutting checks. |
+| `notification.send` handler map | `src/worker/jobs/notification-send.ts` | Add `draft-offset-bumped` to the existing `"game-results" | "mozgov-triggered" | "draft-order-provisional"` map. |
+| Self-scheduling loop pattern | `src/worker/jobs/scores-poll.ts:273-281` | `draft.reconcile` mirrors this `scheduleNext()` shape. |
+| Worker registration | `src/worker/index.ts` | Add new handler registration AND the bootstrap `enqueueJob("draft.reconcile", ...)` at startup. |
 
 ### Testing Notes
 
-- **Unit-pure**: `minLegalOffsetMinutes`, `validateOffset`, `effectiveOffset`, `computeScheduledDraftOpenAt` — straight Vitest, no DB.
-- **DB-touching**: `scheduleDraftOpen`, `rescheduleAllPendingGames`, `revalidateOffsetsForLeague` — use existing Prisma test-DB pattern (see `src/server/services/draft-order.test.ts`).
+- **Unit-pure**: `minLegalOffsetMinutes`, `validateOffset`, `effectiveOffset`, the modified `calcDraftOpenTime` — straight Vitest, no DB.
+- **DB-touching**: `revalidateOffsetsForLeague`, `rescheduleAllPendingGames` — use existing Prisma test-DB pattern (see `src/server/services/draft-order.test.ts`).
 - **Worker handlers**: existing tests in `src/worker/jobs/*.test.ts` use a mocked `Job` payload; follow that.
-- **Edge: tipoff TBD**: NBA's schedule sometimes shows `"TBD"` for round-progression games (we saw this with WCF Game 7). `NbaGame.gameDate` will be null/sentinel — `scheduleDraftOpen` MUST skip gracefully and let `draft.reconcile` pick it up later when tipoff resolves.
-- **Edge: participant joins after draft already opened**: status is no longer `pending`, so the revalidate helper should treat it as a no-op (don't bump an in-progress draft).
+- **Updating existing tests**: Tests for `calcDraftOpenTime` in `src/worker/jobs/draft-order-publish.test.ts` (if present — check) will fail after Task 5 changes the signature and behavior. Rewrite them rather than preserving the 9am PST assertions.
+- **Edge: tipoff TBD**: NBA's schedule sometimes shows `"TBD"` for round-progression games (we hit this with WCF Game 7). `NbaGame.gameDate` will be null/sentinel — the modified `calcDraftOpenTime` caller MUST skip gracefully and let `draft.reconcile` pick it up later when tipoff resolves.
+- **Edge: participant joins after draft already opened**: status is no longer `pending`, so `revalidateOffsetsForLeague` should skip those games — do NOT bump an in-progress draft.
 - **Edge: game already manually opened** (commissioner clicked "Open Draft Window"): status flipped to `draft-open` → `draft.open` job no-ops via AC5 → reconcile leaves it alone.
+- **Edge: countdown widget when `draftOpensAt` is in the past but status still `pending`** (job failed): render the "opening shortly" state and rely on the next reconcile / manual override to recover.
 
 ### Project Structure Notes
 
-- New service file: `src/server/services/draft-open-schedule.ts`
-- New worker handler: `src/worker/jobs/draft-reconcile.ts`
-- New component: `src/components/league/NextDraftCountdown.tsx`
-- New test files: `src/server/services/draft-open-schedule.test.ts`, `src/worker/jobs/draft-reconcile.test.ts`, `src/worker/jobs/draft-open.test.ts` (if not already present)
-- Schema additions are additive only; existing `Game.draftOpensAt` / `Game.draftClosesAt` from Story 3.4 are untouched
+- **Modified**: `src/lib/constants.ts`, `prisma/schema.prisma`, `src/worker/jobs/draft-order-publish.ts`, `src/worker/jobs/draft-open.ts`, `src/server/services/draft-order.ts`, `src/server/services/job-queue.ts`, `src/server/api/routers/league.ts`, `src/lib/job-queues.ts`, `src/worker/index.ts`
+- **New files**: `src/server/services/draft-open-schedule.ts`, `src/worker/jobs/draft-reconcile.ts`, `src/components/league/NextDraftCountdown.tsx`
+- **New test files**: `src/server/services/draft-open-schedule.test.ts`, `src/worker/jobs/draft-reconcile.test.ts`, `src/worker/jobs/draft-open.test.ts` (if not already present)
+- **UI**: League Settings form gets the new field; game detail page gets override + preview + countdown; league home gets countdown.
+- Schema additions are additive; no destructive migrations.
 
 ### References
 
 - [Source: planning-artifacts/epics.md#Story 7.1] — acceptance criteria
-- [Source: implementation-artifacts/3-4-draft-window-and-selection-clock.md] — existing draft window service, `draft.open` handler, clock model, `db push` note
+- [Source: implementation-artifacts/3-4-draft-window-and-selection-clock.md] — existing draft window service, `draft.open` handler, `draftOpensAt` field, `db push` note
 - [Source: implementation-artifacts/3-3-draft-order-generation.md] — draft order auto-generation, ties into `autoGenerateProvisionalNext` flow
-- [Source: src/lib/job-queues.ts] — pg-boss queue definitions
-- [Source: src/worker/index.ts] — worker handler registration pattern
+- [Source: src/worker/jobs/draft-order-publish.ts] — EXISTING `calcDraftOpenTime` to modify, EXISTING `draftOpensAt` write
+- [Source: src/lib/job-queues.ts] — pg-boss queue definitions; add `draft.reconcile`
+- [Source: src/worker/index.ts] — worker handler registration + bootstrap location
 - [Source: src/worker/jobs/scores-poll.ts] — self-scheduling loop pattern to mirror for `draft.reconcile`
 - [Source: src/server/services/draft-window.ts] — existing `openDraftWindow`, `getDraftStatus`
 - [Source: src/server/services/draft-order.ts] — `autoGenerateProvisionalNext` (existing hook point for new-game scheduling)
-- [Source: src/server/services/nba-stats.ts] — `getNextSeriesGame`, `getCachedSchedule`
+- [Source: src/server/services/nba-stats.ts] — `getCachedSchedule`, `getNextSeriesGame`
 - [Source: src/server/services/playoff-series.ts] — schedule-derived series catalog (5/18)
-- [Source: prisma/schema.prisma] — Game / League / NbaGame models
-- [Source: src/server/api/routers/league.ts] — `joinLeague` mutation, where the participant-change hook attaches
+- [Source: prisma/schema.prisma] — Game / League / NbaGame models; `Game.draftOpensAt` already exists
+- [Source: src/server/api/routers/league.ts] — `joinLeague` mutation (where the participant-change hook attaches); `leaveLeague` to be added
 
 ## Dev Agent Record
 
