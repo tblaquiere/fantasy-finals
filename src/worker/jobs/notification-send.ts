@@ -70,6 +70,11 @@ const NOTIFICATION_TEMPLATES: Record<
     title: "Your Pick Position Changed",
     body: "A stat correction updated the standings. Tap to see your new pick position.",
   }),
+  // Story 7.1: auto-bump from revalidateOffsetsForLeague
+  "draft-offset-bumped": () => ({
+    title: "Draft Schedule Adjusted",
+    body: "A participant change required your draft to open earlier so every picker can finish before tipoff. Tap for details.",
+  }),
 };
 
 export async function handleNotificationSend(

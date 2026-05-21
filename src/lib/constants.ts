@@ -15,6 +15,21 @@ export type ClockDurationMinutes = (typeof CLOCK_DURATION_OPTIONS)[number];
 // Mozgov Rule threshold: players with fewer than this many first-half minutes trigger the rule
 export const MOZGOV_THRESHOLD_MINUTES = 5;
 
+// Buffer (minutes) appended to the minimum-legal draft-open offset so the last
+// picker still has slack before tipoff. Story 7.1.
+export const DRAFT_TIPOFF_BUFFER_MINUTES = 15;
+
+// Default draft-open offset (minutes before NBA tipoff) for new leagues. Story 7.1.
+export const DEFAULT_DRAFT_OPEN_OFFSET_MINUTES = 150;
+
+// Reconcile-loop drift threshold (minutes). If NBA tipoff shifts by more than
+// this from the currently-scheduled draftOpensAt, the reconcile loop re-enqueues
+// the draft.open job. Story 7.1.
+export const DRAFT_RECONCILE_DRIFT_THRESHOLD_MINUTES = 5;
+
+// Reconcile loop interval (ms). Story 7.1.
+export const DRAFT_RECONCILE_INTERVAL_MS = 60 * 60 * 1000;
+
 // Maximum selection clock duration (minutes) per pick
 export const MAX_CLOCK_MINUTES = 60;
 

@@ -8,6 +8,7 @@ import { InviteLink } from "~/components/league/InviteLink";
 import { CommissionerControls } from "~/components/league/CommissionerControls";
 import { DeleteLeagueSection } from "~/components/league/DeleteLeagueSection";
 import { DraftControls } from "~/components/league/DraftControls";
+import { DraftScheduleSettings } from "~/components/league/DraftScheduleSettings";
 import { BottomNav } from "~/components/shared/BottomNav";
 
 interface Props {
@@ -39,9 +40,13 @@ export default async function LeagueSettingsPage({ params }: Props) {
   // Fetch participant list for delegation UI
   let participants: { userId: string; name: string | null; email: string | null; isCommissioner: boolean }[] = [];
   let leagueName = "";
+  let draftOpenOffsetMinutes = 150;
+  let clockDurationMinutes = 30;
   try {
     const leagueData = await caller.league.getLeague({ leagueId });
     leagueName = leagueData.name;
+    draftOpenOffsetMinutes = leagueData.draftOpenOffsetMinutes;
+    clockDurationMinutes = leagueData.clockDurationMinutes;
     participants = leagueData.participants.map((p) => ({
       userId: p.user.id,
       name: p.user.name,
@@ -78,6 +83,21 @@ export default async function LeagueSettingsPage({ params }: Props) {
             Generate draft orders, open/close draft windows, and manage games.
           </p>
           <DraftControls leagueId={leagueId} />
+        </div>
+
+        <div className="mb-4 rounded-xl bg-zinc-900 p-4">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-400">
+            Auto-Open Schedule
+          </h2>
+          <p className="mb-3 text-xs text-zinc-500">
+            Default minutes before NBA tipoff to auto-open each game&apos;s draft. Each game inherits this value and can override it.
+          </p>
+          <DraftScheduleSettings
+            leagueId={leagueId}
+            initialOffsetMinutes={draftOpenOffsetMinutes}
+            participantCount={participants.length}
+            clockDurationMinutes={clockDurationMinutes}
+          />
         </div>
 
         <div className="mb-4 rounded-xl bg-zinc-900 p-4">

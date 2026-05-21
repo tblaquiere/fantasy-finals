@@ -1,18 +1,29 @@
 /**
- * draft.order-publish handler — Story 3.4
+ * draft.order-publish handler — Stories 3.4, 7.1
  *
  * Fired ~30 minutes after a game concludes with final scores confirmed.
  * 1. Generates + persists the draft order for the next game.
- * 2. Sets draftOpensAt (9am PST next day) and draftClosesAt (next tip-off) on Game.
- * 3. Schedules draft.open job for draftOpensAt.
- * 4. Enqueues notification.send for all participants.
+ * 2. Computes draftOpensAt = tipoff − effectiveOffset (Story 7.1; replaces
+ *    the legacy "9am PST next day" trigger).
+ * 3. Persists draftOpensAt + draftClosesAt on Game.
+ * 4. Replaces any queued draft.open job for this game with one scheduled
+ *    at the new draftOpensAt.
+ * 5. Enqueues notification.send for all participants.
+ *
+ * If tipoff is unknown when this fires, draftOpensAt is not persisted and
+ * no draft.open is queued — the hourly draft.reconcile loop (Story 7.1)
+ * picks the game up once NbaGame.gameDate is populated.
  */
 
 import type { Job } from "pg-boss";
 
 import { db } from "~/server/db";
 import { generateAndPersistDraftOrder } from "~/server/services/draft-order";
-import { enqueueJob } from "~/server/services/job-queue";
+import { enqueueJob, replaceJob } from "~/server/services/job-queue";
+import {
+  effectiveOffset,
+  computeDraftOpensAt,
+} from "~/server/services/draft-open-schedule";
 
 export type DraftOrderPublishPayload = {
   leagueId: string;
@@ -21,55 +32,20 @@ export type DraftOrderPublishPayload = {
 };
 
 /**
- * Calculate the next 9am PST/PDT from a reference time.
- * Always uses America/Los_Angeles (handles DST automatically).
+ * Compute the auto-open time for a draft: `tipoffUTC − offsetMinutes`.
+ * Story 7.1 replaced the legacy "9am PST next day" logic with this
+ * tipoff-relative calculation so commissioners can configure how early
+ * each draft opens via League.draftOpenOffsetMinutes (with optional
+ * per-game override on Game.draftOpenOffsetMinutes).
+ *
+ * Returns null when tipoff is not yet known (the reconcile loop will
+ * re-attempt scheduling once tipoff resolves).
  */
-export function calcDraftOpenTime(referenceDate: Date): Date {
-  // Format the reference date in LA timezone to get the local date
-  const laFormatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Los_Angeles",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    hour12: false,
-  });
-
-  const parts = laFormatter.formatToParts(referenceDate);
-  const year = Number(parts.find((p) => p.type === "year")?.value);
-  const month = Number(parts.find((p) => p.type === "month")?.value);
-  const day = Number(parts.find((p) => p.type === "day")?.value);
-  const hour = Number(parts.find((p) => p.type === "hour")?.value);
-
-  // If it's already past 9am LA time, schedule for next day at 9am
-  // If before 9am, schedule for today at 9am (unlikely for a game ending in evening)
-  let targetDay = day;
-  if (hour >= 9) {
-    targetDay = day + 1;
-  }
-
-  // Build a date string in LA timezone and convert to UTC
-  // Create date at 9:00 AM in Los Angeles
-  const laDateStr = `${year}-${String(month).padStart(2, "0")}-${String(targetDay).padStart(2, "0")}T09:00:00`;
-
-  // Get UTC offset for that specific date in LA timezone
-  const tempDate = new Date(laDateStr + "Z");
-  const utcFormatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Los_Angeles",
-    hour: "2-digit",
-    hour12: false,
-  });
-  const utcHour = tempDate.getUTCHours();
-  const laHour = Number(
-    utcFormatter.formatToParts(tempDate).find((p) => p.type === "hour")?.value,
-  );
-  const offsetHours = utcHour - laHour;
-
-  // 9am LA = 9 + offset in UTC
-  const result = new Date(laDateStr + "Z");
-  result.setUTCHours(9 + offsetHours, 0, 0, 0);
-
-  return result;
+export function calcDraftOpenTime(
+  tipoffUTC: Date | null | undefined,
+  offsetMinutes: number,
+): Date | null {
+  return computeDraftOpensAt(tipoffUTC, offsetMinutes);
 }
 
 export async function handleDraftOrderPublish(
@@ -91,30 +67,58 @@ export async function handleDraftOrderPublish(
     nbaGameId,
   );
 
-  // 2. Calculate draft window times
-  const now = new Date();
-  const draftOpensAt = calcDraftOpenTime(now);
-  const draftClosesAt = tipOffTime ? new Date(tipOffTime) : null;
+  // 2. Resolve tipoff. Prefer the payload field, fall back to NbaGame.gameDate.
+  let tipoff: Date | null = tipOffTime ? new Date(tipOffTime) : null;
+  if (!tipoff) {
+    const nbaGame = await db.nbaGame.findUnique({
+      where: { nbaGameId },
+      select: { gameDate: true },
+    });
+    tipoff = nbaGame?.gameDate ?? null;
+  }
+  const draftClosesAt = tipoff;
 
-  // 3. Update Game with window timestamps
+  // 3. Resolve the effective offset (per-game override > league default).
+  const game = await db.game.findUnique({
+    where: { id: gameId },
+    include: { league: { select: { draftOpenOffsetMinutes: true } } },
+  });
+  if (!game) {
+    console.error(`[worker] draft.order-publish: game ${gameId} not found post-generate`);
+    return;
+  }
+  const offset = effectiveOffset(game, game.league);
+
+  // 4. Compute draftOpensAt. If tipoff is unknown, persist only what we know
+  // and let draft.reconcile fill in draftOpensAt when tipoff resolves.
+  const draftOpensAt = calcDraftOpenTime(tipoff, offset);
+
   await db.game.update({
     where: { id: gameId },
-    data: { draftOpensAt, draftClosesAt },
+    data: {
+      draftOpensAt: draftOpensAt ?? null,
+      draftClosesAt,
+    },
   });
 
-  // 4. Schedule draft.open job for 9am PST
-  await enqueueJob(
-    "draft.open",
-    { leagueId, gameId },
-    { startAfter: draftOpensAt },
-  );
+  if (draftOpensAt) {
+    await replaceJob(
+      "draft.open",
+      `draft.open:${gameId}`,
+      { leagueId, gameId },
+      { startAfter: draftOpensAt },
+    );
+  } else {
+    console.log(
+      `[worker] draft.order-publish: tipoff unknown for ${nbaGameId}; deferring draft.open enqueue to reconcile loop`,
+    );
+  }
 
   // 5. Notify all participants
   const participants = await db.participant.findMany({
     where: { leagueId },
     select: { userId: true },
   });
-
   for (const p of participants) {
     await enqueueJob("notification.send", {
       userId: p.userId,
@@ -125,6 +129,6 @@ export async function handleDraftOrderPublish(
   }
 
   console.log(
-    `[worker] draft.order-publish complete: gameId=${gameId} opensAt=${draftOpensAt.toISOString()}`,
+    `[worker] draft.order-publish complete: gameId=${gameId} opensAt=${draftOpensAt?.toISOString() ?? "deferred"}`,
   );
 }

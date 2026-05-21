@@ -254,6 +254,105 @@ export const draftRouter = createTRPCRouter({
     }),
 
   /**
+   * Story 7.1 — Commissioner sets a per-game override of the league's
+   * draft-open offset. Pass null to clear the override (game inherits
+   * league default). Validates against the participants × clock + buffer
+   * rule, persists, recomputes draftOpensAt, and replaces the queued
+   * draft.open job.
+   */
+  updateGameDraftOffset: commissionerProcedure
+    .input(
+      z.object({
+        leagueId: z.string(),
+        gameId: z.string(),
+        draftOpenOffsetMinutes: z.number().int().min(1).nullable(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const isAdmin = ctx.session.user.role === "admin";
+      await enforceLeagueCommissioner(ctx.db, userId, input.leagueId, isAdmin);
+
+      const game = await ctx.db.game.findUnique({
+        where: { id: input.gameId },
+        include: {
+          league: {
+            select: {
+              id: true,
+              draftOpenOffsetMinutes: true,
+              clockDurationMinutes: true,
+              _count: { select: { participants: true } },
+            },
+          },
+        },
+      });
+      if (!game || game.leagueId !== input.leagueId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Game not found" });
+      }
+      if (game.status !== "pending") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Cannot change offset after the draft has opened",
+        });
+      }
+
+      const { validateOffset, effectiveOffset, computeDraftOpensAt } =
+        await import("~/server/services/draft-open-schedule");
+      const { replaceJob, cancelJob } = await import("~/server/services/job-queue");
+
+      const effective =
+        input.draftOpenOffsetMinutes ?? game.league.draftOpenOffsetMinutes;
+      const validation = validateOffset(
+        game.league._count.participants,
+        game.league.clockDurationMinutes,
+        effective,
+      );
+      if (!validation.ok) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: validation.message });
+      }
+
+      await ctx.db.game.update({
+        where: { id: input.gameId },
+        data: { draftOpenOffsetMinutes: input.draftOpenOffsetMinutes },
+      });
+
+      const nbaGame = await ctx.db.nbaGame.findUnique({
+        where: { nbaGameId: game.nbaGameId },
+        select: { gameDate: true },
+      });
+      const finalEffective = effectiveOffset(
+        { draftOpenOffsetMinutes: input.draftOpenOffsetMinutes },
+        game.league,
+      );
+      const newDraftOpensAt = computeDraftOpensAt(nbaGame?.gameDate, finalEffective);
+      if (newDraftOpensAt) {
+        await ctx.db.game.update({
+          where: { id: input.gameId },
+          data: { draftOpensAt: newDraftOpensAt },
+        });
+        await replaceJob(
+          "draft.open",
+          `draft.open:${input.gameId}`,
+          { leagueId: input.leagueId, gameId: input.gameId },
+          { startAfter: newDraftOpensAt },
+        );
+      } else {
+        // Tipoff isn't known yet, so we can't compute a new draftOpensAt.
+        // Cancel any prior draft.open job that was scheduled against the
+        // OLD offset so it doesn't fire with stale data. Also null out
+        // the stored draftOpensAt. The reconcile loop will re-schedule
+        // once NbaGame.gameDate becomes available.
+        await ctx.db.game.update({
+          where: { id: input.gameId },
+          data: { draftOpensAt: null },
+        });
+        await cancelJob("draft.open", `draft.open:${input.gameId}`);
+      }
+
+      return { success: true, draftOpensAt: newDraftOpensAt };
+    }),
+
+  /**
    * Manually set the real NBA game ID for a game.
    * Commissioner fallback when auto-resolve fails.
    */

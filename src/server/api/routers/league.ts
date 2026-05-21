@@ -6,6 +6,11 @@ import { enforceLeagueCommissioner } from "~/server/api/helpers";
 import { CLOCK_DURATION_OPTIONS } from "~/lib/constants";
 import { ensureSeriesPopulated } from "~/server/services/populate-series";
 import { getPlayoffSeries } from "~/server/services/playoff-series";
+import {
+  validateOffset,
+  rescheduleAllPendingGames,
+  revalidateOffsetsForLeague,
+} from "~/server/services/draft-open-schedule";
 
 const validClockMinutes = new Set<number>(CLOCK_DURATION_OPTIONS);
 
@@ -234,6 +239,11 @@ export const leagueRouter = createTRPCRouter({
             isCommissioner: false,
           },
         });
+        // Story 7.1: a new participant tightens the minimum-legal offset.
+        // Bump any pending games that now violate the rule.
+        void revalidateOffsetsForLeague(ctx.db, league.id).catch((err) =>
+          console.error("[joinLeague] revalidateOffsetsForLeague error:", err),
+        );
         return { leagueId: league.id, alreadyMember: false };
       } catch (err) {
         if (
@@ -243,6 +253,37 @@ export const leagueRouter = createTRPCRouter({
         }
         throw err;
       }
+    }),
+
+  /**
+   * Story 7.1 — Participant leaves a league. Commissioner cannot leave
+   * (must delegate first). After deletion, runs revalidateOffsetsForLeague
+   * even though leaving lowers the participant count — the helper is
+   * idempotent and only acts when violations exist.
+   */
+  leaveLeague: protectedProcedure
+    .input(z.object({ leagueId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const participant = await ctx.db.participant.findUnique({
+        where: { userId_leagueId: { userId, leagueId: input.leagueId } },
+      });
+      if (!participant) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Not a member of this league" });
+      }
+      if (participant.isCommissioner) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Commissioner cannot leave — delegate to another participant first",
+        });
+      }
+      await ctx.db.participant.delete({
+        where: { userId_leagueId: { userId, leagueId: input.leagueId } },
+      });
+      void revalidateOffsetsForLeague(ctx.db, input.leagueId).catch((err) =>
+        console.error("[leaveLeague] revalidateOffsetsForLeague error:", err),
+      );
+      return { success: true };
     }),
 
   delegateCommissioner: commissionerProcedure
@@ -294,6 +335,56 @@ export const leagueRouter = createTRPCRouter({
           });
         }
       });
+
+      return { success: true };
+    }),
+
+  /**
+   * Story 7.1 — Update the league-level default draft-open offset (minutes before tipoff).
+   * Validates the new value against the participants × clock + buffer rule;
+   * if accepted, recomputes draftOpensAt for every pending game that uses the
+   * default and replaces their queued draft.open jobs.
+   */
+  updateDraftOpenOffset: commissionerProcedure
+    .input(
+      z.object({
+        leagueId: z.string(),
+        draftOpenOffsetMinutes: z.number().int().min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const isAdmin = ctx.session.user.role === "admin";
+      await enforceLeagueCommissioner(
+        ctx.db, ctx.session.user.id, input.leagueId, isAdmin,
+      );
+
+      const league = await ctx.db.league.findFirst({
+        where: { id: input.leagueId, deletedAt: null },
+        select: {
+          id: true,
+          clockDurationMinutes: true,
+          _count: { select: { participants: true } },
+        },
+      });
+      if (!league) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "League not found" });
+      }
+
+      const validation = validateOffset(
+        league._count.participants,
+        league.clockDurationMinutes,
+        input.draftOpenOffsetMinutes,
+      );
+      if (!validation.ok) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: validation.message });
+      }
+
+      await ctx.db.league.update({
+        where: { id: input.leagueId },
+        data: { draftOpenOffsetMinutes: input.draftOpenOffsetMinutes },
+      });
+
+      await rescheduleAllPendingGames(ctx.db, input.leagueId);
 
       return { success: true };
     }),

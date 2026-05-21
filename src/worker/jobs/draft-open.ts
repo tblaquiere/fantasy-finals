@@ -1,12 +1,16 @@
 /**
- * draft.open handler — Stories 3.4, 3.11
+ * draft.open handler — Stories 3.4, 3.11, 7.1
  *
- * Fires at 9am PST (scheduled by draft.order-publish).
- * 1. Transitions Game status: pending → draft-open
- * 2. Starts the first participant's selection clock
- * 3. Enqueues clock.expire job for the first slot
- * 4. Notifies all participants that draft is open (Story 3.11)
- * 5. Notifies first participant it's their turn
+ * Fires at Game.draftOpensAt (scheduled by draft.order-publish at tipoff −
+ * effectiveOffset; Story 7.1 replaced the legacy 9am PST trigger).
+ * 1. Idempotent guard: if Game.status !== "pending", no-op and return.
+ *    Covers manual override (commissioner already opened draft), prior
+ *    fire, and double-enqueue.
+ * 2. Transitions Game status: pending → draft-open
+ * 3. Starts the first participant's selection clock
+ * 4. Enqueues clock.expire job for the first slot
+ * 5. Notifies all participants that draft is open (Story 3.11)
+ * 6. Notifies first participant it's their turn
  */
 
 import type { Job } from "pg-boss";

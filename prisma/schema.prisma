@@ -94,6 +94,9 @@ model League {
   // schedule-derived naming convention changes later.
   seriesName           String?       @map("series_name")
   clockDurationMinutes Int           @map("clock_duration_minutes")
+  // Default minutes before NBA tipoff to auto-open the draft window. Story 7.1.
+  // Validated against participants × clockDurationMinutes + DRAFT_TIPOFF_BUFFER_MINUTES.
+  draftOpenOffsetMinutes Int         @default(150) @map("draft_open_offset_minutes")
   inviteToken          String?       @unique @map("invite_token")
   createdById          String        @map("created_by_id")
   createdAt            DateTime      @default(now()) @map("created_at")
@@ -141,6 +144,10 @@ model Game {
 
   draftOpensAt  DateTime? @map("draft_opens_at")
   draftClosesAt DateTime? @map("draft_closes_at")
+
+  // Per-game override of League.draftOpenOffsetMinutes. Story 7.1.
+  // Null means inherit the league default at compute time.
+  draftOpenOffsetMinutes Int? @map("draft_open_offset_minutes")
 
   // Story 7.3 / 7.4: true when draft order was auto-generated immediately after the prior
   // game finalized. Can be regenerated on stat corrections until the draft window opens

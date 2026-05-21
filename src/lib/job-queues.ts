@@ -59,6 +59,16 @@ export const JOB_QUEUES = [
     expireInSeconds: 60,
     deleteAfterSeconds: 86400, // 1 day — high-frequency, prune aggressively
   },
+  {
+    // Story 7.1: hourly loop that re-checks NBA tipoff for upcoming pending
+    // games and re-enqueues draft.open if tipoff shifted >5 min.
+    name: "draft.reconcile",
+    retryLimit: 2,
+    retryDelay: 60,
+    retryBackoff: true,
+    expireInSeconds: 300,
+    deleteAfterSeconds: 86400, // 1 day
+  },
 ] as const;
 
 export type JobQueueName = (typeof JOB_QUEUES)[number]["name"];

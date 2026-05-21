@@ -4,6 +4,7 @@ import { JOB_QUEUES } from "~/lib/job-queues";
 import { handleClockExpire } from "./jobs/clock-expire";
 import { handleDraftOpen } from "./jobs/draft-open";
 import { handleDraftOrderPublish } from "./jobs/draft-order-publish";
+import { handleDraftReconcile } from "./jobs/draft-reconcile";
 import { handleHalftimeCheck } from "./jobs/halftime-check";
 import { handleNotificationSend } from "./jobs/notification-send";
 import { handleScoresPoll } from "./jobs/scores-poll";
@@ -31,11 +32,24 @@ async function main() {
   // Register handlers — stubs for now; full implementations in later stories
   await boss.work("draft.order-publish", handleDraftOrderPublish);
   await boss.work("draft.open", handleDraftOpen);
+  await boss.work("draft.reconcile", handleDraftReconcile);
   await boss.work("clock.expire", handleClockExpire);
   await boss.work("halftime.check", handleHalftimeCheck);
   await boss.work("scores.poll", handleScoresPoll);
   await boss.work("stats.correct", handleStatsCorrect);
   await boss.work("notification.send", handleNotificationSend);
+
+  // Story 7.1: bootstrap the reconcile loop. singletonKey makes this
+  // idempotent across worker restarts — pg-boss will reject a duplicate
+  // enqueue if one is already queued.
+  await boss.send(
+    "draft.reconcile",
+    {},
+    {
+      startAfter: new Date(Date.now() + 60_000),
+      singletonKey: "draft.reconcile:singleton",
+    },
+  );
 
   console.log("[worker] all handlers registered — ready");
 

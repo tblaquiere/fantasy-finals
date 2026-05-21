@@ -7,6 +7,7 @@ import { createCaller } from "~/server/api/root";
 import { db } from "~/server/db";
 import { BottomNav } from "~/components/shared/BottomNav";
 import { NextDraftOrder } from "~/components/league/NextDraftOrder";
+import { NextDraftCountdown } from "~/components/league/NextDraftCountdown";
 
 interface Props {
   params: Promise<{ leagueId: string }>;
@@ -37,6 +38,18 @@ export default async function LeagueHomePage({ params }: Props) {
     (p) => p.isCommissioner && p.user.id === session.user.id,
   );
 
+  // Story 7.1: find the next pending game with a scheduled open time so we
+  // can render the live countdown.
+  const nextScheduledGame = await db.game.findFirst({
+    where: {
+      leagueId,
+      status: "pending",
+      draftOpensAt: { not: null, gt: new Date() },
+    },
+    orderBy: { draftOpensAt: "asc" },
+    select: { id: true, gameNumber: true, draftOpensAt: true },
+  });
+
   return (
     <main className="min-h-screen bg-zinc-950 pb-16 text-zinc-50">
       <div className="mx-auto max-w-xl px-4 py-6">
@@ -46,6 +59,15 @@ export default async function LeagueHomePage({ params }: Props) {
         <p className="mb-6 text-sm text-zinc-400">
           {league.seriesName ?? league.seriesId}
         </p>
+
+        {nextScheduledGame?.draftOpensAt && (
+          <div className="mb-6 flex items-center justify-between rounded-xl border border-orange-500/30 bg-orange-500/5 px-4 py-3">
+            <span className="text-sm text-zinc-300">
+              Game {nextScheduledGame.gameNumber} draft
+            </span>
+            <NextDraftCountdown draftOpensAt={nextScheduledGame.draftOpensAt} />
+          </div>
+        )}
 
         {/* Participants */}
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-400">

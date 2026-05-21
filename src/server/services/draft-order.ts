@@ -268,6 +268,46 @@ export async function autoGenerateProvisionalNext(
     next.nbaGameId,
     { provisional: true },
   );
+
+  // Story 7.1: schedule the auto-open job for this newly-created game.
+  // tipoff is known here (came from getNextSeriesGame), so we can write
+  // draftOpensAt and enqueue draft.open right away — the reconcile loop
+  // will pick up any later tipoff shifts.
+  try {
+    const league = await db.league.findUnique({
+      where: { id: leagueId },
+      select: { draftOpenOffsetMinutes: true },
+    });
+    if (league) {
+      const { effectiveOffset, computeDraftOpensAt } = await import(
+        "./draft-open-schedule"
+      );
+      const { replaceJob } = await import("./job-queue");
+      const offset = effectiveOffset(
+        { draftOpenOffsetMinutes: null },
+        league,
+      );
+      const draftOpensAt = computeDraftOpensAt(next.gameDateUTC, offset);
+      if (draftOpensAt) {
+        await db.game.update({
+          where: { id: result.gameId },
+          data: { draftOpensAt },
+        });
+        await replaceJob(
+          "draft.open",
+          `draft.open:${result.gameId}`,
+          { leagueId, gameId: result.gameId },
+          { startAfter: draftOpensAt },
+        );
+      }
+    }
+  } catch (err) {
+    console.error(
+      "[draft-order] autoGenerateProvisionalNext: schedule draft.open failed:",
+      err,
+    );
+  }
+
   return { ...result, created: true, resolved: true };
 }
 

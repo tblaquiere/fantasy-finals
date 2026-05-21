@@ -1,5 +1,6 @@
 import { type JobInsert, PgBoss } from "pg-boss";
 
+import { db } from "~/server/db";
 import { env } from "~/env.js";
 import { JOB_QUEUES, type JobQueueName } from "~/lib/job-queues";
 
@@ -37,4 +38,47 @@ export async function enqueueJob<T extends object>(
 ): Promise<string | null> {
   const boss = await getBoss();
   return boss.send(name, payload, options ?? {});
+}
+
+/**
+ * Enqueue a job, replacing any already-queued job with the same singletonKey.
+ *
+ * pg-boss's default `singletonKey` semantics REJECT duplicate enqueues rather
+ * than replacing them — `boss.send()` simply returns null for the duplicate.
+ * For the re-enqueue patterns introduced in Story 7.1 (per-game offset edit,
+ * reconcile-loop tipoff drift, participant-count bump) we want replacement,
+ * not rejection. We delete any not-yet-started jobs (state in 'created' /
+ * 'retry') matching the singletonKey, then send fresh. Active jobs (state
+ * 'active') are NOT cancelled — they're already running.
+ */
+export async function replaceJob<T extends object>(
+  name: JobQueueName,
+  singletonKey: string,
+  payload: T,
+  options?: Omit<SendOptions, "singletonKey">,
+): Promise<string | null> {
+  await db.$executeRawUnsafe(
+    `DELETE FROM pgboss.job WHERE name = $1 AND singleton_key = $2 AND state IN ('created','retry')`,
+    name,
+    singletonKey,
+  );
+  const boss = await getBoss();
+  return boss.send(name, payload, { ...(options ?? {}), singletonKey });
+}
+
+/**
+ * Cancel any not-yet-started jobs matching the given queue name + singletonKey.
+ * Used when we want to remove a stale scheduled job without enqueuing a
+ * replacement (e.g. clearing a per-game override while tipoff is still
+ * unknown — Story 7.1 H1). Active jobs (already running) are not cancelled.
+ */
+export async function cancelJob(
+  name: JobQueueName,
+  singletonKey: string,
+): Promise<void> {
+  await db.$executeRawUnsafe(
+    `DELETE FROM pgboss.job WHERE name = $1 AND singleton_key = $2 AND state IN ('created','retry')`,
+    name,
+    singletonKey,
+  );
 }
