@@ -42,6 +42,12 @@ async function main() {
   // Story 7.1: bootstrap the reconcile loop. singletonKey makes this
   // idempotent across worker restarts — pg-boss will reject a duplicate
   // enqueue if one is already queued.
+  //
+  // ASSUMPTION (pg-boss v10): default singletonKey rejects duplicate enqueues
+  // when a job with the same key is in `created`/`retry`/`active` state.
+  // If pg-boss is upgraded, verify this still holds — a behavior shift to
+  // "replace" or "queue with delay" would compound reconcile passes on every
+  // worker restart. Lock in via `singletonHours: 1` if the contract weakens.
   await boss.send(
     "draft.reconcile",
     {},

@@ -51,10 +51,13 @@ export async function handleDraftReconcile(
 
   try {
     const now = new Date();
+    // Include games with NULL draftOpensAt — these are the "tipoff was TBD when
+    // draft.order-publish fired" case (Dev Notes: WCF Game 7 scenario). They
+    // need first-time scheduling once NbaGame.gameDate becomes known.
     const games = await db.game.findMany({
       where: {
         status: "pending",
-        draftOpensAt: { not: null, gt: now },
+        OR: [{ draftOpensAt: null }, { draftOpensAt: { gt: now } }],
       },
       include: {
         league: { select: { draftOpenOffsetMinutes: true } },
@@ -76,7 +79,26 @@ export async function handleDraftReconcile(
 
       const offset = effectiveOffset(game, game.league);
       const newDraftOpensAt = computeDraftOpensAt(nbaGame.gameDate, offset);
-      if (!newDraftOpensAt || !game.draftOpensAt) continue;
+      if (!newDraftOpensAt) continue;
+
+      if (!game.draftOpensAt) {
+        // First-time scheduling: tipoff just resolved for a previously-deferred game.
+        await db.game.update({
+          where: { id: game.id },
+          data: { draftOpensAt: newDraftOpensAt },
+        });
+        await replaceJob(
+          "draft.open",
+          `draft.open:${game.id}`,
+          { leagueId: game.leagueId, gameId: game.id },
+          { startAfter: newDraftOpensAt },
+        );
+        reenqueued++;
+        console.log(
+          `[worker] draft.reconcile: first-time schedule for game ${game.id} at ${newDraftOpensAt.toISOString()}`,
+        );
+        continue;
+      }
 
       const driftMs = Math.abs(
         newDraftOpensAt.getTime() - game.draftOpensAt.getTime(),
@@ -94,8 +116,9 @@ export async function handleDraftReconcile(
         { startAfter: newDraftOpensAt },
       );
       reenqueued++;
+      const driftSec = Math.round(driftMs / 1000);
       console.log(
-        `[worker] draft.reconcile: re-enqueued draft.open for game ${game.id} (drift=${Math.round(driftMs / 60_000)}min)`,
+        `[worker] draft.reconcile: re-enqueued draft.open for game ${game.id} (drift=${driftSec}s)`,
       );
     }
 

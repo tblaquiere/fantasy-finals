@@ -50,6 +50,14 @@ export async function enqueueJob<T extends object>(
  * not rejection. We delete any not-yet-started jobs (state in 'created' /
  * 'retry') matching the singletonKey, then send fresh. Active jobs (state
  * 'active') are NOT cancelled — they're already running.
+ *
+ * Race semantics: DELETE and SEND are NOT atomic. Two concurrent callers with
+ * the same singletonKey can interleave such that caller A's freshly-sent job
+ * is deleted by caller B's subsequent DELETE. Net behavior is last-writer-
+ * wins with no error surfaced. The lost job is recoverable via the next
+ * draft.reconcile pass (worst case ~1h), which re-derives `draftOpensAt`
+ * from current state and re-enqueues. Document any new callers that depend
+ * on synchronous "this job will run" guarantees here.
  */
 export async function replaceJob<T extends object>(
   name: JobQueueName,

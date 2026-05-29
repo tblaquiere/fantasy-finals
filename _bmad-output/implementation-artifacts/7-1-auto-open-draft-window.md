@@ -1,6 +1,6 @@
 # Story 7.1: Auto-Open Draft Window Before Tipoff
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -325,4 +325,44 @@ Adversarial code review surfaced 2 Critical, 1 High, 6 Medium, and 3 Low finding
 ### Test Result
 
 `pnpm test` → **112/112 passing** (was 97 before this story; +15 from `draft-open-schedule.test.ts`, `draft-open.test.ts`, and `draft-reconcile.test.ts`).
+`npx tsc --noEmit` → clean.
+
+## Second-Pass Code Review (AI)
+
+**Reviewer:** claude-opus-4-7 (fresh-context adversarial pass)
+**Date:** 2026-05-29
+**Outcome:** **Changes Applied — story → done**
+
+The first-pass self-review missed three real issues. The second pass caught them and fixed all CRITICAL/HIGH/MEDIUM findings inline.
+
+### Critical — Fixed
+
+- **C1** — `draft.reconcile` query filtered out `draftOpensAt IS NULL` games, defeating the explicitly-documented "tipoff TBD" fallback path (AC4 + AC6, WCF Game 7 scenario). Fixed in `src/worker/jobs/draft-reconcile.ts` by widening the query to `OR: [{ draftOpensAt: null }, { draftOpensAt: { gt: now } }]` and adding a first-time-schedule branch that handles previously-deferred games once tipoff resolves.
+
+- **C2** — Task 8 was checked off claiming three `revalidateOffsetsForLeague` tests existed in `draft-open-schedule.test.ts`. They did not. Added them: (a) bumps a pending game when participant join makes the override illegal, (b) no-ops when no game becomes illegal, (c) skips games whose status is no longer `pending` (don't disrupt in-progress drafts).
+
+### High — Fixed
+
+- **H1** — Task 6 was checked off claiming a happy-path test in `draft-open.test.ts`. Only the three no-op branches were tested; the actual "pending → draft-open, start clock, enqueue clock.expire + notifications" path had no assertions. Added the happy-path test covering all side effects.
+
+### Medium — Fixed
+
+- **M1** — `joinLeague`/`leaveLeague` fire-and-forget `revalidateOffsetsForLeague` with bare `console.error` on failure. Re-tagged as `[CRITICAL]` with leagueId/userId context for log-based alerting.
+- **M3** — `handleDraftOpen` post-transaction `clock.expire` enqueue is non-atomic — a failure leaves the game `draft-open` with no expiry job. Wrapped with a `[CRITICAL]` log including manual-recovery instructions, then re-throws so pg-boss records the failure.
+- **M5** — `revalidateOffsetsForLeague` notification spam: one push per commissioner per bumped game became one push per commissioner per revalidate pass.
+- **M6** — `updateDraftOpenOffset` validation + write wrapped in a transaction so a concurrent join can't sneak in between read and write.
+
+### Medium — Documented (intentionally not refactored)
+
+- **M2** — `replaceJob` DELETE+SEND race documented in JSDoc: last-writer-wins, recoverable by next reconcile pass.
+- **M4** — `worker/index.ts` reconcile bootstrap documented as depending on pg-boss v10 singletonKey reject semantics; comment notes the `singletonHours: 1` lockdown to apply if the contract weakens on upgrade.
+
+### Low — Deferred
+
+- L1 (duplicated DELETE SQL in `replaceJob`/`cancelJob`), L2 (countdown widget magic numbers): tracked but not bundled — code clarity nits.
+- L3 (drift log rounding to whole minutes) fixed in passing while editing `draft-reconcile.ts` — now logs seconds.
+
+### Test Result
+
+`pnpm test` → **116/116 passing** (+4 from second-pass: happy-path draft-open + 3 revalidateOffsetsForLeague tests).
 `npx tsc --noEmit` → clean.

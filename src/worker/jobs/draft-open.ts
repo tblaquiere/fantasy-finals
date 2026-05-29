@@ -77,12 +77,23 @@ export async function handleDraftOpen(
     }),
   ]);
 
-  // Schedule clock.expire job
-  await enqueueJob(
-    "clock.expire",
-    { slotId: firstSlot.id, leagueId, gameId },
-    { startAfter: clockExpiresAt },
-  );
+  // Schedule clock.expire job. If this fails AFTER the status flip above,
+  // the game is "draft-open" but the participant has no automatic timeout.
+  // Tag for log-based alerting; a retry of this job will no-op via the
+  // status guard, so manual recovery (re-enqueue clock.expire) is required.
+  try {
+    await enqueueJob(
+      "clock.expire",
+      { slotId: firstSlot.id, leagueId, gameId },
+      { startAfter: clockExpiresAt },
+    );
+  } catch (err) {
+    console.error(
+      `[CRITICAL][worker] draft.open(${gameId}): status flipped to draft-open but clock.expire enqueue FAILED for slot=${firstSlot.id}. Manual recovery: re-enqueue clock.expire at ${clockExpiresAt.toISOString()}.`,
+      err,
+    );
+    throw err;
+  }
 
   // Notify all participants that draft is open (Story 3.11)
   const participants = await db.participant.findMany({

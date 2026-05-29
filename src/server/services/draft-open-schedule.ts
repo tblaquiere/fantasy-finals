@@ -145,14 +145,18 @@ export async function revalidateOffsetsForLeague(
         { startAfter: newDraftOpensAt },
       );
     }
+  }
 
+  // Send ONE notification per commissioner per revalidate pass, regardless of
+  // how many games were bumped (avoids notification spam when a single join
+  // adjusts every pending game).
+  if (bumpedGameIds.length > 0) {
     for (const userId of commissionerUserIds) {
       await enqueueJob("notification.send", {
         userId,
         type: "draft-offset-bumped",
         leagueId,
-        gameId: game.id,
-        link: `/league/${leagueId}/game/${game.id}`,
+        link: `/league/${leagueId}`,
       });
     }
   }

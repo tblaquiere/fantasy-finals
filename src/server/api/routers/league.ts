@@ -240,9 +240,15 @@ export const leagueRouter = createTRPCRouter({
           },
         });
         // Story 7.1: a new participant tightens the minimum-legal offset.
-        // Bump any pending games that now violate the rule.
+        // Bump any pending games that now violate the rule. Fire-and-forget so
+        // the join response isn't blocked on a multi-game recompute; tag the
+        // failure log with [CRITICAL] for alerting since pending games will be
+        // mis-scheduled until the next reconcile pass picks up the drift.
         void revalidateOffsetsForLeague(ctx.db, league.id).catch((err) =>
-          console.error("[joinLeague] revalidateOffsetsForLeague error:", err),
+          console.error(
+            `[CRITICAL][joinLeague] revalidateOffsetsForLeague failed for leagueId=${league.id} userId=${ctx.session.user.id}; pending games may be mis-scheduled until next reconcile pass`,
+            err,
+          ),
         );
         return { leagueId: league.id, alreadyMember: false };
       } catch (err) {
@@ -281,7 +287,10 @@ export const leagueRouter = createTRPCRouter({
         where: { userId_leagueId: { userId, leagueId: input.leagueId } },
       });
       void revalidateOffsetsForLeague(ctx.db, input.leagueId).catch((err) =>
-        console.error("[leaveLeague] revalidateOffsetsForLeague error:", err),
+        console.error(
+          `[CRITICAL][leaveLeague] revalidateOffsetsForLeague failed for leagueId=${input.leagueId} userId=${userId}; pending games may be mis-scheduled until next reconcile pass`,
+          err,
+        ),
       );
       return { success: true };
     }),
@@ -358,30 +367,36 @@ export const leagueRouter = createTRPCRouter({
         ctx.db, ctx.session.user.id, input.leagueId, isAdmin,
       );
 
-      const league = await ctx.db.league.findFirst({
-        where: { id: input.leagueId, deletedAt: null },
-        select: {
-          id: true,
-          clockDurationMinutes: true,
-          _count: { select: { participants: true } },
-        },
-      });
-      if (!league) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "League not found" });
-      }
+      // Validate + write inside a single transaction so a concurrent join
+      // can't change the participant count between the read and the write.
+      // A participant joining AFTER this completes is handled by joinLeague's
+      // call to revalidateOffsetsForLeague.
+      await ctx.db.$transaction(async (tx) => {
+        const league = await tx.league.findFirst({
+          where: { id: input.leagueId, deletedAt: null },
+          select: {
+            id: true,
+            clockDurationMinutes: true,
+            _count: { select: { participants: true } },
+          },
+        });
+        if (!league) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "League not found" });
+        }
 
-      const validation = validateOffset(
-        league._count.participants,
-        league.clockDurationMinutes,
-        input.draftOpenOffsetMinutes,
-      );
-      if (!validation.ok) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: validation.message });
-      }
+        const validation = validateOffset(
+          league._count.participants,
+          league.clockDurationMinutes,
+          input.draftOpenOffsetMinutes,
+        );
+        if (!validation.ok) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: validation.message });
+        }
 
-      await ctx.db.league.update({
-        where: { id: input.leagueId },
-        data: { draftOpenOffsetMinutes: input.draftOpenOffsetMinutes },
+        await tx.league.update({
+          where: { id: input.leagueId },
+          data: { draftOpenOffsetMinutes: input.draftOpenOffsetMinutes },
+        });
       });
 
       await rescheduleAllPendingGames(ctx.db, input.leagueId);

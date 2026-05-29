@@ -99,6 +99,6 @@ development_status:
   epic-6-retrospective: optional
 
   # Epic 7: Scheduled Draft Window Open
-  epic-7: in-progress
-  7-1-auto-open-draft-window: review
+  epic-7: done
+  7-1-auto-open-draft-window: done
   epic-7-retrospective: optional
