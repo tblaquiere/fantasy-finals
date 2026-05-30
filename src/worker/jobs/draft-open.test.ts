@@ -7,9 +7,15 @@ import {
   type DraftOpenPayload,
 } from "./draft-open";
 
-const enqueueSpy = vi.fn().mockResolvedValue("job-id");
+type EnqueueFn = (
+  name: string,
+  payload: unknown,
+  options?: unknown,
+) => Promise<string | null>;
+const enqueueSpy = vi.fn<EnqueueFn>();
+enqueueSpy.mockResolvedValue("job-id");
 vi.mock("~/server/services/job-queue", () => ({
-  enqueueJob: (...args: unknown[]) => enqueueSpy(...args),
+  enqueueJob: (...args: Parameters<EnqueueFn>) => enqueueSpy(...args),
 }));
 
 const TEST_USER = "test-draftopen-user";

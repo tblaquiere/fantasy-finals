@@ -5,13 +5,21 @@ import { db, seedTestSeries } from "~/test/helpers";
 import { handleDraftReconcile, type DraftReconcilePayload } from "./draft-reconcile";
 
 // Stub the job-queue module so the test never reaches a real pg-boss instance.
-// We assert by spying on these mocks.
-const enqueueSpy = vi.fn().mockResolvedValue("job-id");
-const replaceSpy = vi.fn().mockResolvedValue("job-id");
+// We assert by spying on these mocks. Spies are explicitly typed so ESLint's
+// no-unsafe-return / no-unsafe-assignment rules don't flag the mock factory.
+type EnqueueFn = (
+  name: string,
+  payload: unknown,
+  options?: unknown,
+) => Promise<string | null>;
+const enqueueSpy = vi.fn<EnqueueFn>();
+const replaceSpy = vi.fn<EnqueueFn>();
+enqueueSpy.mockResolvedValue("job-id");
+replaceSpy.mockResolvedValue("job-id");
 
 vi.mock("~/server/services/job-queue", () => ({
-  enqueueJob: (...args: unknown[]) => enqueueSpy(...args),
-  replaceJob: (...args: unknown[]) => replaceSpy(...args),
+  enqueueJob: (...args: Parameters<EnqueueFn>) => enqueueSpy(...args),
+  replaceJob: (...args: Parameters<EnqueueFn>) => replaceSpy(...args),
 }));
 
 const TEST_USER = "test-reconcile-user";

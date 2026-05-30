@@ -7,12 +7,19 @@ import {
 } from "./draft-open-schedule";
 import { db, seedTestSeries } from "~/test/helpers";
 
-const enqueueSpy = vi.fn().mockResolvedValue("job-id");
-const replaceSpy = vi.fn().mockResolvedValue("job-id");
+type EnqueueFn = (
+  name: string,
+  payload: unknown,
+  options?: unknown,
+) => Promise<string | null>;
+const enqueueSpy = vi.fn<EnqueueFn>();
+const replaceSpy = vi.fn<EnqueueFn>();
+enqueueSpy.mockResolvedValue("job-id");
+replaceSpy.mockResolvedValue("job-id");
 
 vi.mock("~/server/services/job-queue", () => ({
-  enqueueJob: (...args: unknown[]) => enqueueSpy(...args),
-  replaceJob: (...args: unknown[]) => replaceSpy(...args),
+  enqueueJob: (...args: Parameters<EnqueueFn>) => enqueueSpy(...args),
+  replaceJob: (...args: Parameters<EnqueueFn>) => replaceSpy(...args),
 }));
 
 describe("minLegalOffsetMinutes", () => {
